@@ -32,6 +32,18 @@ export function seedDatabase() {
   const priyaId = 'usr_priya_switcher';
   const priyaPass = hashPassword('priya123');
 
+  // Persona 4: Sneha Roy (School Student - Exploring Science vs Design vs Tech)
+  const snehaId = 'usr_sneha_school';
+  const snehaPass = hashPassword('sneha123');
+
+  // Persona 5: Kavita Patel (Entrepreneur - Local Verified Repair Service)
+  const kavitaId = 'usr_kavita_entrepreneur';
+  const kavitaPass = hashPassword('kavita123');
+
+  // Persona 6: Deepak Nair (Higher Studies Seeker - Research & Post-Grad Profile)
+  const deepakId = 'usr_deepak_higherstudies';
+  const deepakPass = hashPassword('deepak123');
+
   // Admin User
   const adminId = 'usr_admin';
   const adminPass = hashPassword('admin123');
@@ -44,6 +56,9 @@ export function seedDatabase() {
   insertUser.run(arunId, 'Arun Kumar', 'arun@example.com', arunPass, 'user', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', now);
   insertUser.run(muthuId, 'Muthu Vel', 'muthu@example.com', muthuPass, 'user', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', now);
   insertUser.run(priyaId, 'Priya Sharma', 'priya@example.com', priyaPass, 'user', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', now);
+  insertUser.run(snehaId, 'Sneha Roy', 'sneha@example.com', snehaPass, 'user', 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150', now);
+  insertUser.run(kavitaId, 'Kavita Patel', 'kavita@example.com', kavitaPass, 'user', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', now);
+  insertUser.run(deepakId, 'Deepak Nair', 'deepak@example.com', deepakPass, 'user', 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150', now);
   insertUser.run(adminId, 'Career Solver Admin', 'admin@careersolver.ai', adminPass, 'admin', 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150', now);
 
   // 2. SEED USER PROFILES
