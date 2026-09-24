@@ -1,0 +1,154 @@
+// Typed API Client for Career Solver
+
+const API_BASE = '/api';
+
+function getToken(): string | null {
+  return localStorage.getItem('cs_token');
+}
+
+export function setToken(token: string) {
+  localStorage.setItem('cs_token', token);
+}
+
+export function removeToken() {
+  localStorage.removeItem('cs_token');
+}
+
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data.error || `Request failed with status ${res.status}`);
+  }
+
+  return data;
+}
+
+export const api = {
+  // Auth
+  register: (body: any) => request<any>('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+  login: (body: any) => request<any>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  demoLogin: (persona: 'arun' | 'muthu' | 'priya' | 'admin') => request<any>(`/auth/demo-login/${persona}`, { method: 'POST' }),
+  getCurrentUser: () => request<any>('/auth/me'),
+
+  // Profile & Onboarding
+  getProfile: () => request<any>('/profile'),
+  updateProfile: (body: any) => request<any>('/profile', { method: 'PUT', body: JSON.stringify(body) }),
+  completeOnboarding: (body: any) => request<any>('/profile/onboarding', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Goals
+  getGoals: () => request<any>('/goals'),
+  createGoal: (body: any) => request<any>('/goals', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Reality Check & Comparison
+  runRealityCheck: (targetCareer: string) => request<any>('/reality-check', { method: 'POST', body: JSON.stringify({ targetCareer }) }),
+  getRealityCheckHistory: () => request<any>('/reality-check/history'),
+  comparePathways: (careers: string[]) => request<any>('/reality-check/compare', { method: 'POST', body: JSON.stringify({ careers }) }),
+
+  // Navigator
+  chatNavigator: (query: string, history: any[] = [], language: string = 'English') =>
+    request<any>('/navigator/chat', { method: 'POST', body: JSON.stringify({ query, history, language }) }),
+
+  // Roadmaps & Plans
+  getActiveRoadmap: () => request<any>('/roadmaps/active'),
+  generateRoadmap: (body: { goalTitle: string; targetPathway?: string; currentLevel?: string }) =>
+    request<any>('/roadmaps/generate', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Learn-by-Doing Tasks
+  getTasks: (status?: string) => request<any>(`/tasks${status ? `?status=${status}` : ''}`),
+  getTodayTasks: () => request<any>('/tasks/today'),
+  updateTaskStatus: (id: string, status: string, user_notes?: string) =>
+    request<any>(`/tasks/${id}/status`, { method: 'PUT', body: JSON.stringify({ status, user_notes }) }),
+  submitTaskNotes: (id: string, userNotes: string) =>
+    request<any>(`/tasks/${id}/submit`, { method: 'POST', body: JSON.stringify({ userNotes }) }),
+
+  // AI Mentor
+  getMentorMessages: (mode: string) => request<any>(`/mentor/conversations/${mode}`),
+  sendMentorMessage: (mode: string, message: string) =>
+    request<any>('/mentor/chat', { method: 'POST', body: JSON.stringify({ mode, message }) }),
+
+  // Practice Studio
+  getPracticePrompts: () => request<any>('/practice/prompts'),
+  evaluatePractice: (body: { practiceType: string; mode: string; promptQuestion: string; userResponse: string }) =>
+    request<any>('/practice/evaluate', { method: 'POST', body: JSON.stringify(body) }),
+  getPracticeHistory: () => request<any>('/practice/history'),
+
+  // Challenges
+  getChallenges: () => request<any>('/challenges'),
+  joinChallenge: (id: string) => request<any>(`/challenges/${id}/join`, { method: 'POST' }),
+  checkChallengeDay: (id: string, dayNumber: number) =>
+    request<any>(`/challenges/${id}/check-day`, { method: 'POST', body: JSON.stringify({ dayNumber }) }),
+
+  // Community
+  getPosts: (category?: string, search?: string) => {
+    const params = new URLSearchParams();
+    if (category) params.append('category', category);
+    if (search) params.append('search', search);
+    return request<any>(`/community/posts?${params.toString()}`);
+  },
+  createPost: (body: { title?: string; content: string; category?: string }) =>
+    request<any>('/community/posts', { method: 'POST', body: JSON.stringify(body) }),
+  deletePost: (id: string) => request<any>(`/community/posts/${id}`, { method: 'DELETE' }),
+  likePost: (id: string) => request<any>(`/community/posts/${id}/like`, { method: 'POST' }),
+  getComments: (postId: string) => request<any>(`/community/posts/${postId}/comments`),
+  addComment: (postId: string, content: string) =>
+    request<any>(`/community/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ content }) }),
+  reportPost: (postId: string, reason: string) =>
+    request<any>(`/community/posts/${postId}/report`, { method: 'POST', body: JSON.stringify({ reason }) }),
+
+  // Mentors (Human Mentorship Hub)
+  getMentors: (area?: string, search?: string) => {
+    const params = new URLSearchParams();
+    if (area) params.append('area', area);
+    if (search) params.append('search', search);
+    return request<any>(`/mentors?${params.toString()}`);
+  },
+  requestMentorship: (mentorId: string, body: { message: string; goals?: string; preferredTime?: string }) =>
+    request<any>(`/mentors/${mentorId}/request`, { method: 'POST', body: JSON.stringify(body) }),
+  getMyMentorRequests: () => request<any>('/mentors/my-requests'),
+
+  // Organizations & Opportunities
+  getOrganizations: (type?: string) => request<any>(`/organizations${type ? `?type=${type}` : ''}`),
+  getOpportunities: (type?: string, search?: string) => {
+    const params = new URLSearchParams();
+    if (type) params.append('type', type);
+    if (search) params.append('search', search);
+    return request<any>(`/opportunities?${params.toString()}`);
+  },
+  applyOpportunity: (oppId: string, notes?: string) =>
+    request<any>(`/opportunities/${oppId}/apply`, { method: 'POST', body: JSON.stringify({ notes }) }),
+
+  // Business Builder
+  generateBusinessPlan: (body: { ideaTitle: string; rawDescription: string; targetAudience?: string }) =>
+    request<any>('/business/generate', { method: 'POST', body: JSON.stringify(body) }),
+  getMyBusinessIdeas: () => request<any>('/business/my-ideas'),
+
+  // Skill Passport
+  getSkillPassport: () => request<any>('/skill-passport'),
+  addSkillToPassport: (body: { skill_name: string; category?: string; level?: string }) =>
+    request<any>('/skill-passport/add-skill', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Dashboard Overview
+  getDashboardOverview: () => request<any>('/dashboard/overview'),
+
+  // Settings & Admin
+  getSettings: () => request<any>('/settings'),
+  saveSettings: (body: { apiKey?: string; model?: string }) => request<any>('/settings', { method: 'POST', body: JSON.stringify(body) }),
+  resetDemoData: () => request<any>('/settings/reset-demo', { method: 'POST' }),
+  getAdminStats: () => request<any>('/admin/stats'),
+};

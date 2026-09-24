@@ -1,0 +1,6 @@
+node_modules/
+dist/
+data/career_solver.db-wal
+data/career_solver.db-shm
+.env
+.DS_Store
