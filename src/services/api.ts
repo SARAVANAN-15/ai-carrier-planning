@@ -43,7 +43,7 @@ export const api = {
   // Auth
   register: (body: any) => request<any>('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: any) => request<any>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
-  demoLogin: (persona: 'arun' | 'muthu' | 'priya' | 'admin') => request<any>(`/auth/demo-login/${persona}`, { method: 'POST' }),
+  demoLogin: (persona: 'arun' | 'muthu' | 'priya' | 'sneha' | 'kavita' | 'deepak' | 'admin') => request<any>(`/auth/demo-login/${persona}`, { method: 'POST' }),
   getCurrentUser: () => request<any>('/auth/me'),
 
   // Profile & Onboarding
@@ -151,4 +151,28 @@ export const api = {
   saveSettings: (body: { apiKey?: string; model?: string }) => request<any>('/settings', { method: 'POST', body: JSON.stringify(body) }),
   resetDemoData: () => request<any>('/settings/reset-demo', { method: 'POST' }),
   getAdminStats: () => request<any>('/admin/stats'),
+  // Notifications (Module 50)
+  getNotifications: () => request<{ notifications: any[]; unreadCount: number }>('/notifications'),
+  markNotificationRead: (id: string) => request<any>(`/notifications/${id}/read`, { method: 'PUT' }),
+  markAllNotificationsRead: () => request<any>('/notifications/read-all', { method: 'PUT' }),
+  deleteNotification: (id: string) => request<any>(`/notifications/${id}`, { method: 'DELETE' }),
+
+  // Mentor Inquiries & Management (Module 18 & 30)
+  getIncomingMentorRequests: () => request<{ requests: any[] }>('/mentors/incoming-requests'),
+  respondMentorRequest: (id: string, status: 'accepted' | 'declined' | 'completed', response_notes?: string) =>
+    request<any>(`/mentors/requests/${id}/respond`, { method: 'PUT', body: JSON.stringify({ status, response_notes }) }),
+
+  // Opportunity Posting (Module 16 & 30)
+  createOpportunity: (body: any) => request<any>('/opportunities', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Comprehensive Admin Console (Module 30 & 48)
+  getAdminUsers: () => request<{ users: any[] }>('/admin/users'),
+  updateUserRole: (id: string, role: string) => request<any>(`/admin/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
+  getAdminReports: () => request<{ reports: any[] }>('/admin/reports'),
+  handleReportAction: (id: string, action: 'dismiss' | 'delete_post') =>
+    request<any>(`/admin/reports/${id}/action`, { method: 'PUT', body: JSON.stringify({ action }) }),
+  getAdminMentors: () => request<{ mentors: any[] }>('/admin/mentors'),
+  toggleMentorVerification: (id: string) => request<any>(`/admin/mentors/${id}/verify`, { method: 'PUT' }),
+  getAdminOrganizations: () => request<{ organizations: any[]; opportunities: any[] }>('/admin/organizations'),
+
 };

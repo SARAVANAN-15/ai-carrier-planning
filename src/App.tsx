@@ -22,6 +22,7 @@ import { OrganizationsPage } from './pages/OrganizationsPage';
 import { BusinessBuilderPage } from './pages/BusinessBuilderPage';
 import { SkillPassportPage } from './pages/SkillPassportPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { AdminPage } from './pages/AdminPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -82,6 +83,7 @@ export function App() {
               <Route path="/business" element={<BusinessBuilderPage />} />
               <Route path="/skill-passport" element={<SkillPassportPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/admin" element={<AdminPage />} />
             </Route>
 
             {/* Catch-all */}

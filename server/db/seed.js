@@ -906,6 +906,18 @@ export function seedDatabase() {
   insertNotif.run('ntf_2', arunId, 'Mentor Request Accepted!', 'Karthik Sundaram accepted your mentorship request. Check your schedule.', '/mentors', 0, now);
   insertNotif.run('ntf_3', arunId, 'Communication Challenge Day 3', 'Day 3 STAR method task is waiting for you.', '/challenges', 1, now);
 
+  // Muthu Notifications
+  insertNotif.run('ntf_m1', muthuId, 'Apprenticeship Available', 'Apex Power & Industrial posted a Practical Electrical Apprenticeship.', '/organizations', 0, now);
+  insertNotif.run('ntf_m2', muthuId, 'Safety Practice Ready', 'High-voltage Live-Dead-Live verification exercise ready.', '/practice', 0, now);
+
+  // Priya Notifications
+  insertNotif.run('ntf_p1', priyaId, 'Marketing Action Plan Ready', 'Week 1 Content Strategy and Keyword Gap analysis is waiting.', '/tasks', 0, now);
+  insertNotif.run('ntf_p2', priyaId, 'Mentor Suggested', 'Connect with Vandana Rao for career-switch guidance into SEO/Product Marketing.', '/mentors', 0, now);
+
+  // Admin Notifications
+  insertNotif.run('ntf_adm1', adminId, 'Moderation Alert', 'Community moderation queue active. Review flagged reports.', '/admin', 0, now);
+  insertNotif.run('ntf_adm2', adminId, 'System Operational', 'Gemini AI neural provider & deterministic fallback engine active.', '/admin', 0, now);
+
   // 13. SEED INITIAL SYSTEM SETTINGS
   const insertSetting = db.prepare(`
     INSERT OR REPLACE INTO system_settings (key, value, updated_at)

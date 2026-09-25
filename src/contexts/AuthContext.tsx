@@ -41,7 +41,7 @@ interface AuthContextType {
   login: (email: string, pass: string) => Promise<void>;
   register: (name: string, email: string, pass: string, personaType?: string) => Promise<void>;
   logout: () => void;
-  switchDemoPersona: (persona: 'arun' | 'muthu' | 'priya' | 'admin') => Promise<void>;
+  switchDemoPersona: (persona: 'arun' | 'muthu' | 'priya' | 'sneha' | 'kavita' | 'deepak' | 'admin') => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -109,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveGoal(null);
   };
 
-  const switchDemoPersona = async (persona: 'arun' | 'muthu' | 'priya' | 'admin') => {
+  const switchDemoPersona = async (persona: 'arun' | 'muthu' | 'priya' | 'sneha' | 'kavita' | 'deepak' | 'admin') => {
     setIsLoading(true);
     try {
       const res = await api.demoLogin(persona);

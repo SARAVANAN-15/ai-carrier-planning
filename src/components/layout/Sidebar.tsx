@@ -49,6 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { to: '/business', label: t('businessBuilder'), icon: Briefcase, badge: 'MVP' },
     { to: '/skill-passport', label: t('skillPassport'), icon: Award, badge: 'Verified' },
     { to: '/settings', label: t('settings'), icon: Settings, badge: null },
+    { to: '/admin', label: 'Admin & Moderation', icon: ShieldCheck, badge: user?.role === 'admin' ? 'Admin' : 'Portal' },
   ];
 
   return (

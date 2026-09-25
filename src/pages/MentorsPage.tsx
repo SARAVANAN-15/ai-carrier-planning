@@ -30,12 +30,16 @@ export const MentorsPage: React.FC = () => {
   const [sendingRequest, setSendingRequest] = useState(false);
 
   // My requests tab
-  const [tab, setTab] = useState<'browse' | 'my_requests'>('browse');
+  const [tab, setTab] = useState<'browse' | 'my_requests' | 'incoming'>('browse');
+  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [responseNote, setResponseNote] = useState('');
   const [myRequests, setMyRequests] = useState<any[]>([]);
 
   useEffect(() => {
     fetchMentors();
     fetchMyRequests();
+    fetchIncomingRequests();
   }, [areaFilter]);
 
   const fetchMentors = async () => {
@@ -47,6 +51,30 @@ export const MentorsPage: React.FC = () => {
       console.warn('Failed to load mentors:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchIncomingRequests = async () => {
+    try {
+      const data = await api.getIncomingMentorRequests();
+      setIncomingRequests(data.requests || []);
+    } catch (err) {
+      console.warn('Failed to load incoming requests:', err);
+    }
+  };
+
+  const handleRespondRequest = async (id: string, status: 'accepted' | 'declined') => {
+    try {
+      const note = status === 'accepted'
+        ? (responseNote || 'Request accepted! Let us connect on Google Meet / Zoom.')
+        : (responseNote || 'Declined due to scheduling constraints.');
+      await api.respondMentorRequest(id, status, note);
+      setIncomingRequests(prev => prev.map(r => r.id === id ? { ...r, status, response_notes: note } : r));
+      setRespondingId(null);
+      setResponseNote('');
+      confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
+    } catch (err: any) {
+      alert(err.message || 'Action failed');
     }
   };
 
@@ -123,6 +151,17 @@ export const MentorsPage: React.FC = () => {
             }`}
           >
             My Requests ({myRequests.length})
+          </button>
+          <button
+            onClick={() => {
+              setTab('incoming');
+              fetchIncomingRequests();
+            }}
+            className={`px-3 py-1.5 rounded-xl transition-all ${
+              tab === 'incoming' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Mentor Reviews ({incomingRequests.length})
           </button>
         </div>
       </div>
@@ -287,6 +326,110 @@ export const MentorsPage: React.FC = () => {
                 )}
               </div>
             ))
+          )}
+        </div>
+      )}
+
+      
+      {/* Mentor Incoming Reviews Tab (Section 18 & 30) */}
+      {tab === 'incoming' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-indigo-950">Mentor Review & Inquiries Center</p>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Inspect incoming mentee requests, review goals, accept sessions, and provide meeting links.
+              </p>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+              Role: Mentor / Practicing Expert
+            </span>
+          </div>
+
+          {incomingRequests.length === 0 ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-soft">
+              <p className="text-sm font-semibold text-slate-700">No incoming mentorship requests.</p>
+              <p className="text-xs text-slate-400 mt-1">When students request guidance, they will appear here for your review.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {incomingRequests.map((req) => (
+                <div key={req.id} className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-soft space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <img src={req.mentee_avatar || 'https://api.dicebear.com/7.x/initials/svg?seed=Mentee'} alt={req.mentee_name} className="w-10 h-10 rounded-full object-cover border" />
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">{req.mentee_name}</p>
+                        <p className="text-[11px] text-slate-500">{req.mentee_occupation || 'Learner'} &bull; Goal: {req.mentee_target_goal || 'Growth'}</p>
+                      </div>
+                    </div>
+                    <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase ${
+                      req.status === 'accepted' ? 'bg-emerald-100 text-emerald-800' :
+                      req.status === 'declined' ? 'bg-rose-100 text-rose-800' :
+                      'bg-amber-100 text-amber-800'
+                    }`}>
+                      {req.status}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 text-xs text-slate-700 space-y-1">
+                    <p><span className="font-semibold text-slate-900">Message:</span> {req.message}</p>
+                    {req.goals && <p><span className="font-semibold text-slate-900">Specific Outcome:</span> {req.goals}</p>}
+                    {req.preferred_time && <p><span className="font-semibold text-slate-900">Requested Timing:</span> {req.preferred_time}</p>}
+                    {req.response_notes && (
+                      <p className="text-indigo-800 bg-indigo-50/60 p-2 rounded-lg mt-2 font-medium">
+                        Mentor Note: "{req.response_notes}"
+                      </p>
+                    )}
+                  </div>
+
+                  {req.status === 'pending' && (
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                      {respondingId === req.id ? (
+                        <div className="w-full space-y-2">
+                          <input
+                            type="text"
+                            value={responseNote}
+                            onChange={(e) => setResponseNote(e.target.value)}
+                            placeholder="Add meeting link or advice note (e.g. meet.google.com/xyz)..."
+                            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => setRespondingId(null)}
+                              className="px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 rounded-lg"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleRespondRequest(req.id, 'accepted')}
+                              className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl"
+                            >
+                              Confirm Accept
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleRespondRequest(req.id, 'declined')}
+                            className="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl"
+                          >
+                            Decline
+                          </button>
+                          <button
+                            onClick={() => setRespondingId(req.id)}
+                            className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm"
+                          >
+                            Accept & Send Meeting Link
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

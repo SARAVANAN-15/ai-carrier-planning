@@ -22,6 +22,50 @@ export const OrganizationsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'opportunities' | 'organizations'>('opportunities');
 
+  // Post Opportunity Modal
+  const [showPostModal, setShowPostModal] = useState(false);
+  const [postForm, setPostForm] = useState({
+    title: '',
+    opp_type: 'Internship',
+    organization_id: '',
+    skills: '',
+    location: 'Remote / Hybrid',
+    duration: '3 Months',
+    description: '',
+    eligibility: 'Open to passionate learners with foundational skills'
+  });
+  const [posting, setPosting] = useState(false);
+
+  const handlePostOpportunity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!postForm.title || !postForm.description) return;
+    setPosting(true);
+    try {
+      const skillsArr = postForm.skills.split(',').map(s => s.trim()).filter(Boolean);
+      await api.createOpportunity({
+        ...postForm,
+        skills: skillsArr.length > 0 ? skillsArr : ['General Skills']
+      });
+      setShowPostModal(false);
+      setPostForm({
+        title: '',
+        opp_type: 'Internship',
+        organization_id: '',
+        skills: '',
+        location: 'Remote / Hybrid',
+        duration: '3 Months',
+        description: '',
+        eligibility: 'Open to passionate learners with foundational skills'
+      });
+      confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to post opportunity');
+    } finally {
+      setPosting(false);
+    }
+  };
+
   // Application modal
   const [selectedOpp, setSelectedOpp] = useState<any | null>(null);
   const [appNotes, setAppNotes] = useState('');
@@ -89,7 +133,14 @@ export const OrganizationsPage: React.FC = () => {
         </div>
 
         {/* Tab Toggle */}
-        <div className="flex rounded-2xl bg-slate-100 p-1 border border-slate-200 text-xs font-semibold">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPostModal(true)}
+            className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all"
+          >
+            + Post Listing
+          </button>
+          <div className="flex rounded-2xl bg-slate-100 p-1 border border-slate-200 text-xs font-semibold">
           <button
             onClick={() => setActiveTab('opportunities')}
             className={`px-3 py-1.5 rounded-xl transition-all ${
@@ -106,6 +157,7 @@ export const OrganizationsPage: React.FC = () => {
           >
             Organizations ({organizations.length})
           </button>
+        </div>
         </div>
       </div>
 
@@ -236,6 +288,126 @@ export const OrganizationsPage: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      
+      {/* Post Opportunity Modal (Section 16 & 30) */}
+      {showPostModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto animate-fade-in">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Post Opportunity or Workshop</h3>
+                <p className="text-[11px] text-slate-500">Employer / Training Provider Collaboration</p>
+              </div>
+              <button onClick={() => setShowPostModal(false)} className="text-slate-400 hover:text-slate-600 text-sm font-bold">&times;</button>
+            </div>
+
+            <form onSubmit={handlePostOpportunity} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Title</label>
+                <input
+                  type="text"
+                  required
+                  value={postForm.title}
+                  onChange={(e) => setPostForm({ ...postForm, title: e.target.value })}
+                  placeholder="e.g. Junior Backend Trainee or Electrical Apprentice"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Opportunity Type</label>
+                  <select
+                    value={postForm.opp_type}
+                    onChange={(e) => setPostForm({ ...postForm, opp_type: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                  >
+                    <option value="Internship">Internship</option>
+                    <option value="Apprenticeship">Apprenticeship</option>
+                    <option value="Training Program">Training Program</option>
+                    <option value="Workshop">Workshop</option>
+                    <option value="Entry-Level Job">Entry-Level Job</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Location</label>
+                  <input
+                    type="text"
+                    value={postForm.location}
+                    onChange={(e) => setPostForm({ ...postForm, location: e.target.value })}
+                    placeholder="e.g. Remote / Bangalore"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Duration</label>
+                  <input
+                    type="text"
+                    value={postForm.duration}
+                    onChange={(e) => setPostForm({ ...postForm, duration: e.target.value })}
+                    placeholder="e.g. 3 Months or 6 Months"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Skills (comma separated)</label>
+                  <input
+                    type="text"
+                    value={postForm.skills}
+                    onChange={(e) => setPostForm({ ...postForm, skills: e.target.value })}
+                    placeholder="e.g. Java, SQL, Spring Boot"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Description</label>
+                <textarea
+                  rows={3}
+                  required
+                  value={postForm.description}
+                  onChange={(e) => setPostForm({ ...postForm, description: e.target.value })}
+                  placeholder="Describe the learning outcomes, daily hands-on involvement, and mentorship provided..."
+                  className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Eligibility Criteria</label>
+                <input
+                  type="text"
+                  value={postForm.eligibility}
+                  onChange={(e) => setPostForm({ ...postForm, eligibility: e.target.value })}
+                  placeholder="e.g. Open to college students or vocational trainees"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowPostModal(false)}
+                  className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-xl font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={posting}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-600/20 disabled:opacity-50"
+                >
+                  {posting ? 'Posting...' : 'Publish Listing'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

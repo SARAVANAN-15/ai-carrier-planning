@@ -22,6 +22,20 @@ function hashPassword(password) {
   return crypto.createHash('sha256').update(password + 'career-solver-salt').digest('hex');
 }
 
+export function createNotification(userId, title, message, link = '') {
+  try {
+    const id = 'notif_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    db.prepare(`
+      INSERT INTO notifications (id, user_id, title, message, link, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
+    `).run(id, userId, title, message, link);
+    return id;
+  } catch (err) {
+    console.error('Failed to create notification:', err);
+    return null;
+  }
+}
+
 // -------------------------------------------------------------
 // 1. AUTHENTICATION & DEMO PERSONAS
 // -------------------------------------------------------------
@@ -79,6 +93,9 @@ router.post('/auth/demo-login/:persona', (req, res) => {
     arun: 'usr_arun_college',
     muthu: 'usr_muthu_vocational',
     priya: 'usr_priya_switcher',
+    sneha: 'usr_sneha_school',
+    kavita: 'usr_kavita_entrepreneur',
+    deepak: 'usr_deepak_higherstudies',
     admin: 'usr_admin'
   };
 
@@ -647,6 +664,10 @@ router.put('/tasks/:id/status', requireAuth, (req, res) => {
 
     // If completed, also automatically add to Skill Passport as completed_activity!
     if (status === 'completed') {
+      createNotification(req.user.id, 'Task Completed! 🚀', `Great work completing: "${task?.title || 'Daily Task'}". Skill progress recorded.`, '/tasks');
+    }
+    // If completed, also automatically add to Skill Passport as completed_activity!
+    if (status === 'completed') {
       const existingSkill = db.prepare('SELECT id FROM user_skills WHERE user_id = ? AND skill_name = ?').get(req.user.id, task.skill);
       if (!existingSkill) {
         db.prepare(`
@@ -985,6 +1006,12 @@ router.post('/challenges/:id/check-day', requireAuth, (req, res) => {
     WHERE id = ?
   `).run(progress, JSON.stringify(completedDays), isCompleted ? 'completed' : 'active', isCompleted ? now : null, participant.id);
 
+  createNotification(
+    req.user.id,
+    isCompleted ? 'Challenge Completed! 🏆' : 'Challenge Check-in',
+    isCompleted ? `Congratulations! You finished the entire "${challenge?.title || 'Challenge'}"!` : `Day ${dayNumber} marked complete for "${challenge?.title || 'Challenge'}".`,
+    '/challenges'
+  );
   res.json({ message: `Day ${dayNumber} marked complete!`, progressDays: progress, isCompleted });
 });
 
@@ -1139,6 +1166,13 @@ router.post('/mentors/:id/request', requireAuth, (req, res) => {
     ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
   `).run(requestId, req.user.id, mentorId, message, goals || '', preferredTime || '', now, now);
 
+  const mentorObj = db.prepare('SELECT name FROM mentors WHERE id = ?').get(mentorId);
+  createNotification(
+    req.user.id,
+    'Mentorship Request Submitted',
+    `Your guidance request to ${mentorObj?.name || 'mentor'} has been submitted.`,
+    '/mentors'
+  );
   res.status(201).json({ message: 'Mentorship request sent successfully!', requestId });
 });
 
@@ -1220,6 +1254,13 @@ router.post('/opportunities/:id/apply', requireAuth, (req, res) => {
     VALUES (?, ?, ?, 'submitted', ?)
   `).run(appId, req.user.id, oppId, notes || 'Applied via Career Solver');
 
+  const oppObj = db.prepare('SELECT title FROM opportunities WHERE id = ?').get(oppId);
+  createNotification(
+    req.user.id,
+    'Application Submitted 📄',
+    `Application registered for "${oppObj?.title || 'Opportunity'}".`,
+    '/organizations'
+  );
   res.status(201).json({ message: 'Application submitted successfully (Demo listing)!' });
 });
 
@@ -1478,6 +1519,228 @@ router.get('/admin/stats', requireAuth, (req, res) => {
       pendingReports: reportsCount
     }
   });
+});
+
+
+// -------------------------------------------------------------
+// NOTIFICATIONS SYSTEM (MODULE / SECTION 50)
+// -------------------------------------------------------------
+router.get('/notifications', requireAuth, (req, res) => {
+  const notifs = db.prepare(`
+    SELECT * FROM notifications 
+    WHERE user_id = ? 
+    ORDER BY created_at DESC 
+    LIMIT 30
+  `).all(req.user.id);
+  const unreadCount = db.prepare(`
+    SELECT COUNT(*) as c FROM notifications 
+    WHERE user_id = ? AND is_read = 0
+  `).get(req.user.id).c;
+  res.json({ notifications: notifs, unreadCount });
+});
+
+router.put('/notifications/:id/read', requireAuth, (req, res) => {
+  db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
+  res.json({ success: true });
+});
+
+router.put('/notifications/read-all', requireAuth, (req, res) => {
+  db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?').run(req.user.id);
+  res.json({ success: true });
+});
+
+router.delete('/notifications/:id', requireAuth, (req, res) => {
+  db.prepare('DELETE FROM notifications WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
+  res.json({ success: true });
+});
+
+// -------------------------------------------------------------
+// MENTOR REVIEW & INCOMING REQUESTS (SECTION 18, 19, 30)
+// -------------------------------------------------------------
+router.get('/mentors/incoming-requests', requireAuth, (req, res) => {
+  const requests = db.prepare(`
+    SELECT mr.*, u.name as mentee_name, u.email as mentee_email, u.avatar as mentee_avatar,
+           up.occupation as mentee_occupation, up.target_goal as mentee_target_goal,
+           m.name as mentor_name
+    FROM mentor_requests mr
+    JOIN users u ON mr.user_id = u.id
+    LEFT JOIN user_profiles up ON u.id = up.user_id
+    JOIN mentors m ON mr.mentor_id = m.id
+    ORDER BY mr.created_at DESC
+  `).all();
+  res.json({ requests });
+});
+
+router.put('/mentors/requests/:id/respond', requireAuth, (req, res) => {
+  const { status, response_notes } = req.body;
+  if (!['accepted', 'declined', 'completed'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status.' });
+  }
+
+  const existing = db.prepare(`
+    SELECT mr.*, m.name as mentor_name 
+    FROM mentor_requests mr 
+    JOIN mentors m ON mr.mentor_id = m.id 
+    WHERE mr.id = ?
+  `).get(req.params.id);
+
+  if (!existing) {
+    return res.status(404).json({ error: 'Mentorship request not found.' });
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE mentor_requests 
+    SET status = ?, response_notes = ?, updated_at = ?
+    WHERE id = ?
+  `).run(status, response_notes || '', now, req.params.id);
+
+  createNotification(
+    existing.user_id,
+    status === 'accepted' ? 'Mentor Request Accepted! 🎉' : 'Mentor Request Update',
+    `${existing.mentor_name} has ${status} your mentorship request.${response_notes ? ` Note: "${response_notes}"` : ''}`,
+    '/mentors'
+  );
+
+  res.json({ success: true, message: `Request marked as ${status}.` });
+});
+
+// -------------------------------------------------------------
+// OPPORTUNITY CREATION / PARTNER POSTING (SECTION 20, 21, 30)
+// -------------------------------------------------------------
+router.post('/opportunities', requireAuth, (req, res) => {
+  const {
+    organization_id,
+    title,
+    opp_type,
+    skills,
+    location,
+    duration,
+    description,
+    eligibility,
+    application_info
+  } = req.body;
+
+  if (!title || !description) {
+    return res.status(400).json({ error: 'Title and description are required.' });
+  }
+
+  let orgId = organization_id;
+  if (!orgId) {
+    const firstOrg = db.prepare('SELECT id FROM organizations LIMIT 1').get();
+    orgId = firstOrg ? firstOrg.id : 'org_default';
+  }
+
+  const oppId = 'opp_' + Date.now();
+  const skillsJson = Array.isArray(skills) ? JSON.stringify(skills) : JSON.stringify([skills || 'General']);
+
+  db.prepare(`
+    INSERT INTO opportunities (
+      id, organization_id, title, opp_type, skills_json, location, duration,
+      description, eligibility, application_info, status, is_demo
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Open', 1)
+  `).run(
+    oppId,
+    orgId,
+    title,
+    opp_type || 'Internship',
+    skillsJson,
+    location || 'Remote / Hybrid',
+    duration || '3 Months',
+    description,
+    eligibility || 'Open to all motivated learners',
+    application_info || 'Click apply on Career Solver platform'
+  );
+
+  res.status(201).json({ success: true, id: oppId, message: 'Opportunity posted successfully!' });
+});
+
+// -------------------------------------------------------------
+// COMPREHENSIVE ADMIN PORTAL API (SECTION 30 & 48)
+// -------------------------------------------------------------
+router.get('/admin/users', requireAuth, (req, res) => {
+  const users = db.prepare(`
+    SELECT u.id, u.name, u.email, u.role, u.avatar, u.created_at,
+           up.persona_type, up.occupation, up.target_goal, up.completion_pct, up.education_level
+    FROM users u
+    LEFT JOIN user_profiles up ON u.id = up.user_id
+    ORDER BY u.created_at DESC
+  `).all();
+  res.json({ users });
+});
+
+router.put('/admin/users/:id/role', requireAuth, (req, res) => {
+  const { role } = req.body;
+  if (!['user', 'mentor', 'organization', 'admin'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role.' });
+  }
+  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, req.params.id);
+  res.json({ success: true, message: `User role updated to ${role}` });
+});
+
+router.get('/admin/reports', requireAuth, (req, res) => {
+  const reports = db.prepare(`
+    SELECT pr.id, pr.post_id, pr.user_id as reporter_id, pr.reason, pr.status, pr.created_at,
+           cp.title as post_title, cp.content as post_content, cp.author_name, cp.category as post_category,
+           u.name as reporter_name
+    FROM post_reports pr
+    JOIN community_posts cp ON pr.post_id = cp.id
+    LEFT JOIN users u ON pr.user_id = u.id
+    ORDER BY pr.created_at DESC
+  `).all();
+  res.json({ reports });
+});
+
+router.put('/admin/reports/:id/action', requireAuth, (req, res) => {
+  const { action } = req.body;
+  const report = db.prepare('SELECT * FROM post_reports WHERE id = ?').get(req.params.id);
+  if (!report) return res.status(404).json({ error: 'Report not found.' });
+
+  if (action === 'delete_post') {
+    db.prepare('DELETE FROM community_posts WHERE id = ?').run(report.post_id);
+    db.prepare("UPDATE post_reports SET status = 'reviewed' WHERE post_id = ?").run(report.post_id);
+    return res.json({ success: true, message: 'Reported post deleted and report resolved.' });
+  } else if (action === 'dismiss') {
+    db.prepare("UPDATE post_reports SET status = 'dismissed' WHERE id = ?").run(req.params.id);
+    return res.json({ success: true, message: 'Report dismissed.' });
+  }
+
+  res.status(400).json({ error: 'Invalid action.' });
+});
+
+router.get('/admin/mentors', requireAuth, (req, res) => {
+  const mentors = db.prepare('SELECT * FROM mentors ORDER BY name ASC').all().map(m => ({
+    ...m,
+    skills: JSON.parse(m.skills_json || '[]'),
+    languages: JSON.parse(m.languages_json || '[]')
+  }));
+  res.json({ mentors });
+});
+
+router.put('/admin/mentors/:id/verify', requireAuth, (req, res) => {
+  const mentor = db.prepare('SELECT verification_status FROM mentors WHERE id = ?').get(req.params.id);
+  if (!mentor) return res.status(404).json({ error: 'Mentor not found.' });
+  const newStatus = mentor.verification_status === 'Verified Mentor' ? 'Pending Verification' : 'Verified Mentor';
+  db.prepare('UPDATE mentors SET verification_status = ? WHERE id = ?').run(newStatus, req.params.id);
+  res.json({ success: true, verification_status: newStatus });
+});
+
+router.get('/admin/organizations', requireAuth, (req, res) => {
+  const orgs = db.prepare('SELECT * FROM organizations ORDER BY name ASC').all().map(o => ({
+    ...o,
+    skills: JSON.parse(o.skills_json || '[]'),
+    services: JSON.parse(o.services_json || '[]')
+  }));
+  const opps = db.prepare(`
+    SELECT o.*, org.name as org_name 
+    FROM opportunities o 
+    JOIN organizations org ON o.organization_id = org.id 
+    ORDER BY o.deadline ASC
+  `).all().map(op => ({
+    ...op,
+    skills: JSON.parse(op.skills_json || '[]')
+  }));
+  res.json({ organizations: orgs, opportunities: opps });
 });
 
 export default router;
