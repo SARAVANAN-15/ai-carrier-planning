@@ -90,6 +90,16 @@ export function requireAuth(req, res, next) {
   next();
 }
 
+// Require Admin role middleware
+export function requireAdmin(req, res, next) {
+  requireAuth(req, res, () => {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+    next();
+  });
+}
+
 // Optional Auth (for public routes that can be personalized if logged in)
 export function optionalAuth(req, res, next) {
   const authHeader = req.headers.authorization;

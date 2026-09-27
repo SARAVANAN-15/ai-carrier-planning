@@ -4,6 +4,7 @@ import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
+  Compass,
   Map,
   CheckSquare,
   Bot,
@@ -90,17 +91,19 @@ export const LandingPage: React.FC = () => {
 
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
-              onClick={handleStart}
+              onClick={() => navigate('/explore')}
               className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-base shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 flex items-center justify-center gap-2"
             >
-              <span>Start Your Career Journey</span>
-              <ArrowRight className="w-5 h-5" />
+              <Compass className="w-5 h-5" />
+              <span>I'm Not Sure What Career to Choose</span>
+              <ArrowRight className="w-4 h-4 ml-1" />
             </button>
             <button
-              onClick={() => navigate('/auth')}
-              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-700 font-semibold text-base border border-slate-200 shadow-sm transition-all"
+              onClick={() => navigate('/reality-check')}
+              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-800 font-bold text-base border border-slate-300 shadow-sm transition-all flex items-center justify-center gap-2"
             >
-              Explore Demo Personas
+              <ShieldCheck className="w-5 h-5 text-indigo-600" />
+              <span>I Already Have a Career in Mind</span>
             </button>
           </div>
 
@@ -121,7 +124,7 @@ export const LandingPage: React.FC = () => {
                 />
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 truncate">Arun (College)</p>
-                  <p className="text-[10px] text-slate-500 truncate">Java Backend Placement</p>
+                  <p className="text-[10px] text-slate-500 truncate">Tech & Data Exploration</p>
                 </div>
               </button>
 

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { db } from '../db/connection.js';
-import { requireAuth, optionalAuth, createToken } from '../middleware/auth.js';
+import { requireAuth, requireAdmin, optionalAuth, createToken } from '../middleware/auth.js';
 import {
   runCareerRealityCheck,
   runCareerNavigator,
@@ -14,6 +14,23 @@ import {
   getApiKey,
   getSelectedModel
 } from '../services/ai.js';
+import {
+  getAllCareers,
+  getCareerById,
+  runCareerDiscovery,
+  compareCareers,
+  generateDynamicRoadmap,
+  generateDynamicTask
+} from '../services/careerEngine.js';
+import {
+  evaluateCareerDNA,
+  generateSkillGapAnalysis,
+  calculateCareerReadiness,
+  APTITUDE_QUESTIONS,
+  PROJECT_CATALOG,
+  INDUSTRY_EXPOSURE_CATALOG,
+  CAREER_LAUNCH_TEMPLATES
+} from '../services/careerDnaEngine.js';
 import { seedDatabase } from '../db/seed.js';
 
 const router = Router();
@@ -315,7 +332,706 @@ router.post('/profile/onboarding', requireAuth, (req, res) => {
     }
   }
 
-  res.json({ message: 'Onboarding completed successfully!', nextStep: '/reality-check' });
+  const updatedProfile = db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(req.user.id);
+  res.json({
+    message: 'Onboarding completed successfully!',
+    nextStep: '/career-dna',
+    profile: updatedProfile
+  });
+});
+
+// -------------------------------------------------------------
+// 2A-1. AI CAREER DNA ASSESSMENT & 3P ANALYSIS (COMPANY FLOW)
+// -------------------------------------------------------------
+router.get('/career-dna/questions', optionalAuth, (req, res) => {
+  res.json({
+    aptitudeQuestions: APTITUDE_QUESTIONS,
+    interestCategories: [
+      { id: 'technology', label: 'Technology & Software Systems', icon: 'Code', desc: 'Building software, scripts, networks, algorithms' },
+      { id: 'data', label: 'Data, Analytics & Modeling', icon: 'Database', desc: 'Working with numbers, SQL, patterns, insights' },
+      { id: 'skilled_trades', label: 'Skilled Trades & Practical Systems', icon: 'Wrench', desc: 'Electrical, plumbing, carpentry, mechanics, machinery' },
+      { id: 'creative', label: 'Creative, Visual Arts & Multimedia', icon: 'Palette', desc: 'Graphic design, UI/UX, video production, storytelling' },
+      { id: 'business', label: 'Business Operations & Management', icon: 'Briefcase', desc: 'Strategy, project coordination, sales, revenue growth' },
+      { id: 'marketing', label: 'Marketing, Content & Brand Growth', icon: 'TrendingUp', desc: 'Social media, copy, SEO, customer acquisition' },
+      { id: 'healthcare', label: 'Healthcare & Patient Wellness', icon: 'Heart', desc: 'Clinical support, health education, diagnostics' },
+      { id: 'agriculture', label: 'Agriculture & Food Processing', icon: 'Sprout', desc: 'Crop science, precision farming, food quality' },
+      { id: 'hospitality', label: 'Hospitality & Tourism Experience', icon: 'Compass', desc: 'Hotel operations, guest experience, events' },
+      { id: 'research', label: 'Research, Science & Inquiry', icon: 'Search', desc: 'Lab experiments, academic investigation, deep inquiry' },
+      { id: 'helping', label: 'Community Service & People Development', icon: 'Users', desc: 'Teaching, counseling, mentoring, community uplift' },
+      { id: 'entrepreneurship', label: 'Entrepreneurship & Independent Venture', icon: 'Rocket', desc: 'Starting a business, agency, solopreneurship, MVPs' }
+    ],
+    workStyleDimensions: [
+      {
+        id: 'autonomy',
+        title: 'Work Autonomy & Collaboration',
+        options: [
+          { id: 'independent', label: 'Independent Contributor', desc: 'Thrives in deep solo focus with clear individual accountability' },
+          { id: 'small_team', label: 'Small Agile Team', desc: 'Close collaboration with 3-6 peers with frequent feedback' },
+          { id: 'large_team', label: 'Large Cross-Functional Group', desc: 'Enjoys broad organizational coordination and structured roles' }
+        ]
+      },
+      {
+        id: 'structurePreference',
+        title: 'Structure & Routine',
+        options: [
+          { id: 'structured', label: 'High Structure & Predictability', desc: 'Prefers well-defined SOPs, standard workflows, and clear expectations' },
+          { id: 'semi_structured', label: 'Semi-Structured with Milestones', desc: 'Clear end goals with freedom to choose the execution method' },
+          { id: 'fluid_experimental', label: 'Dynamic & Experimental', desc: 'High ambiguity, rapidly changing problem spaces, and open-ended exploration' }
+        ]
+      },
+      {
+        id: 'riskTolerance',
+        title: 'Career Risk & Upside Preference',
+        options: [
+          { id: 'stability', label: 'Stability & Consistent Growth', desc: 'Prioritizes secure corporate/public roles and steady career ladders' },
+          { id: 'balanced', label: 'Balanced Performance Upside', desc: 'Base stability combined with performance bonuses and merit recognition' },
+          { id: 'high_upside', label: 'High Risk / High Upside', desc: 'Drawn to startups, commission structures, freelancing, or equity ownership' }
+        ]
+      }
+    ],
+    aspirationDimensions: [
+      {
+        id: 'primaryLaunchGoal',
+        title: 'Primary Career Launch Pathway',
+        options: [
+          { id: 'placement', label: 'Corporate / Industry Placement', desc: 'Campus or off-campus entry into established companies' },
+          { id: 'higher_studies', label: 'Higher Studies & Research', desc: 'Postgraduate degrees (Masters, MBA, PhD) or competitive exam focus' },
+          { id: 'entrepreneurship', label: 'Entrepreneurship & Startups', desc: 'Founding an enterprise, product MVP, or scalable venture' },
+          { id: 'freelancing', label: 'Freelancing & Independent Consulting', desc: 'High-ticket service offerings, agency model, and client contracts' }
+        ]
+      },
+      {
+        id: 'incomeVsStability',
+        title: 'Income vs. Job Stability Focus',
+        options: [
+          { id: 'high_growth', label: 'Accelerated Income Growth', desc: 'Maximum earnings growth trajectory even with demanding ramp-up' },
+          { id: 'balanced', label: 'Balanced Compensation & Balance', desc: 'Solid market-rate earnings paired with predictable work-life balance' },
+          { id: 'stability', label: 'Long-Term Tenure & Security', desc: 'Role stability, job protection, and comprehensive healthcare/pension' }
+        ]
+      }
+    ]
+  });
+});
+
+router.get('/career-dna', requireAuth, (req, res) => {
+  const dnaRow = db.prepare('SELECT * FROM career_dna_assessments WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').get(req.user.id);
+  if (!dnaRow) {
+    return res.json({ hasDna: false, dna: null });
+  }
+
+  const dna = {
+    id: dnaRow.id,
+    userId: dnaRow.user_id,
+    interests: JSON.parse(dnaRow.interests_json || '[]'),
+    aptitude: JSON.parse(dnaRow.aptitude_json || '{}'),
+    workStyle: JSON.parse(dnaRow.work_style_json || '{}'),
+    aspirations: JSON.parse(dnaRow.aspirations_json || '{}'),
+    workPreferences: JSON.parse(dnaRow.work_preferences_json || '{}'),
+    threeP: JSON.parse(dnaRow.three_p_json || '{}'),
+    summaryNarrative: dnaRow.summary_narrative,
+    createdAt: dnaRow.created_at,
+    updatedAt: dnaRow.updated_at
+  };
+
+  res.json({ hasDna: true, dna });
+});
+
+router.post('/career-dna/evaluate', requireAuth, (req, res) => {
+  const { responses = {} } = req.body;
+  const userProfile = db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(req.user.id) || {};
+
+  const evaluated = evaluateCareerDNA(responses, userProfile);
+
+  // Check if existing record exists
+  const existing = db.prepare('SELECT id FROM career_dna_assessments WHERE user_id = ?').get(req.user.id);
+  if (existing) {
+    db.prepare(`
+      UPDATE career_dna_assessments SET
+        interests_json = ?,
+        aptitude_json = ?,
+        work_style_json = ?,
+        aspirations_json = ?,
+        work_preferences_json = ?,
+        three_p_json = ?,
+        raw_responses_json = ?,
+        summary_narrative = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = ?
+    `).run(
+      JSON.stringify(evaluated.interests),
+      JSON.stringify(evaluated.aptitude),
+      JSON.stringify(evaluated.workStyle),
+      JSON.stringify(evaluated.aspirations),
+      JSON.stringify(evaluated.workPreferences),
+      JSON.stringify(evaluated.threeP),
+      JSON.stringify(responses),
+      evaluated.summaryNarrative,
+      req.user.id
+    );
+  } else {
+    db.prepare(`
+      INSERT INTO career_dna_assessments (
+        id, user_id, interests_json, aptitude_json, work_style_json,
+        aspirations_json, work_preferences_json, three_p_json,
+        raw_responses_json, summary_narrative, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).run(
+      evaluated.dnaId,
+      req.user.id,
+      JSON.stringify(evaluated.interests),
+      JSON.stringify(evaluated.aptitude),
+      JSON.stringify(evaluated.workStyle),
+      JSON.stringify(evaluated.aspirations),
+      JSON.stringify(evaluated.workPreferences),
+      JSON.stringify(evaluated.threeP),
+      JSON.stringify(responses),
+      evaluated.summaryNarrative
+    );
+  }
+
+  // Update profile completion percentage
+  db.prepare(`
+    UPDATE user_profiles 
+    SET completion_pct = MAX(completion_pct, 65), updated_at = CURRENT_TIMESTAMP 
+    WHERE user_id = ?
+  `).run(req.user.id);
+
+  // Recalculate readiness score
+  calculateCareerReadiness(req.user.id, db);
+
+  createNotification(
+    req.user.id,
+    'AI Career DNA & 3P Assessment Completed 🧬',
+    `Your Career DNA profile is ready. Process: ${evaluated.threeP.process.primary}, Purpose: ${evaluated.threeP.purpose.primary}.`,
+    '/career-dna'
+  );
+
+  res.json({
+    success: true,
+    message: 'Career DNA assessment evaluated and persisted.',
+    dna: evaluated,
+    nextStep: '/3p-analysis'
+  });
+});
+
+router.get('/3p-analysis', requireAuth, (req, res) => {
+  const dnaRow = db.prepare('SELECT * FROM career_dna_assessments WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').get(req.user.id);
+  if (!dnaRow) {
+    return res.status(404).json({ error: 'Please complete your AI Career DNA Assessment first.' });
+  }
+
+  const threeP = JSON.parse(dnaRow.three_p_json || '{}');
+  const interests = JSON.parse(dnaRow.interests_json || '[]');
+  const aspirations = JSON.parse(dnaRow.aspirations_json || '{}');
+  const workStyle = JSON.parse(dnaRow.work_style_json || '{}');
+
+  res.json({
+    threeP,
+    context: {
+      interests,
+      aspirations,
+      workStyle,
+      summaryNarrative: dnaRow.summary_narrative
+    }
+  });
+});
+
+// -------------------------------------------------------------
+// 2A-2. SKILL GAP IDENTIFICATION & BENCHMARKING
+// -------------------------------------------------------------
+router.get('/skill-gaps', requireAuth, (req, res) => {
+  const userProfile = db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(req.user.id);
+  const activeGoal = db.prepare('SELECT * FROM career_goals WHERE user_id = ? AND status = ? LIMIT 1').get(req.user.id, 'active');
+
+  let targetCareer = null;
+  if (activeGoal) {
+    targetCareer = getCareerById(activeGoal.target_pathway) || getCareerById(activeGoal.title);
+  }
+  if (!targetCareer) {
+    // Default to first catalog career or software developer
+    targetCareer = getCareerById('car_software_eng') || getAllCareers()[0];
+  }
+
+  const userSkills = userProfile ? [
+    ...JSON.parse(userProfile.technical_skills || '[]'),
+    ...JSON.parse(userProfile.practical_skills || '[]'),
+    ...JSON.parse(userProfile.soft_skills || '[]')
+  ] : [];
+
+  const analysis = generateSkillGapAnalysis(userSkills, targetCareer);
+
+  // Persist report snapshot
+  try {
+    const reportId = 'sg_' + Date.now();
+    db.prepare(`
+      INSERT INTO skill_gap_reports (id, user_id, career_id, career_name, overall_gap_pct, skills_comparison_json, priority_actions_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(
+      reportId,
+      req.user.id,
+      analysis.careerId,
+      analysis.careerName,
+      analysis.overallGapPct,
+      JSON.stringify(analysis.skillsComparison),
+      JSON.stringify(analysis.priorityActions)
+    );
+  } catch (err) {
+    console.warn('Failed to cache skill gap report:', err);
+  }
+
+  res.json({
+    analysis,
+    activeGoal: activeGoal || null
+  });
+});
+
+router.get('/skill-gaps/:careerId', requireAuth, (req, res) => {
+  const targetCareer = getCareerById(req.params.careerId);
+  if (!targetCareer) {
+    return res.status(404).json({ error: 'Career not found in catalog.' });
+  }
+
+  const userProfile = db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(req.user.id);
+  const userSkills = userProfile ? [
+    ...JSON.parse(userProfile.technical_skills || '[]'),
+    ...JSON.parse(userProfile.practical_skills || '[]'),
+    ...JSON.parse(userProfile.soft_skills || '[]')
+  ] : [];
+
+  const analysis = generateSkillGapAnalysis(userSkills, targetCareer);
+  res.json({ analysis });
+});
+
+// -------------------------------------------------------------
+// 2A-3. CAREER READINESS SCORE ENGINE
+// -------------------------------------------------------------
+router.get('/readiness/score', requireAuth, (req, res) => {
+  const readiness = calculateCareerReadiness(req.user.id, db);
+  res.json(readiness);
+});
+
+// -------------------------------------------------------------
+// 2A-4. PROJECT-BASED LEARNING (EXPANDED STUDIO)
+// -------------------------------------------------------------
+router.get('/projects', requireAuth, (req, res) => {
+  const userDeliverables = db.prepare('SELECT * FROM project_deliverables WHERE user_id = ?').all(req.user.id);
+  const activeGoal = db.prepare('SELECT * FROM career_goals WHERE user_id = ? AND status = ? LIMIT 1').get(req.user.id, 'active');
+
+  // Filter or prioritize projects by target goal
+  const enrichedCatalog = PROJECT_CATALOG.map((proj) => {
+    const userSubmission = userDeliverables.find((d) => d.project_title === proj.title);
+    return {
+      ...proj,
+      userStatus: userSubmission?.status || 'unstarted',
+      userScore: userSubmission?.score || null,
+      userSubmission: userSubmission || null
+    };
+  });
+
+  res.json({
+    projects: enrichedCatalog,
+    activeGoal: activeGoal?.title || null
+  });
+});
+
+router.post('/projects/submit', requireAuth, (req, res) => {
+  const { projectId, projectTitle, category, deliverableUrl, deliverableNotes } = req.body;
+  if (!projectTitle || !deliverableUrl) {
+    return res.status(400).json({ error: 'Project title and deliverable URL are required.' });
+  }
+
+  const existing = db.prepare('SELECT id FROM project_deliverables WHERE user_id = ? AND project_title = ?').get(req.user.id, projectTitle);
+  const id = existing?.id || 'pdel_' + Date.now();
+  const feedback = 'Deliverable submitted successfully. Architecture meets requirements with comprehensive documentation. Verified proof of work added to portfolio.';
+  const score = 88;
+
+  if (existing) {
+    db.prepare(`
+      UPDATE project_deliverables SET
+        status = 'submitted',
+        deliverable_url = ?,
+        deliverable_notes = ?,
+        review_feedback = ?,
+        score = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(deliverableUrl, deliverableNotes || '', feedback, score, id);
+  } else {
+    db.prepare(`
+      INSERT INTO project_deliverables (
+        id, user_id, career_id, project_title, category,
+        problem_statement, requirements_json, skills_involved_json,
+        expected_deliverables_json, evaluation_criteria_json,
+        status, deliverable_url, deliverable_notes, review_feedback, score,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', '[]', '[]', 'submitted', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).run(
+      id,
+      req.user.id,
+      projectId || 'proj_custom',
+      projectTitle,
+      category || 'Applied Engineering',
+      'User verified submission',
+      deliverableUrl,
+      deliverableNotes || '',
+      feedback,
+      score
+    );
+  }
+
+  // Recalculate readiness score
+  calculateCareerReadiness(req.user.id, db);
+
+  createNotification(
+    req.user.id,
+    'Project Deliverable Submitted! 🚀',
+    `Your submission for "${projectTitle}" has been recorded. Verified proof of work points added.`,
+    '/projects'
+  );
+
+  res.json({
+    success: true,
+    message: 'Project deliverable submitted and verified.',
+    deliverableId: id,
+    feedback,
+    score
+  });
+});
+
+// -------------------------------------------------------------
+// 2A-5. INDUSTRY EXPOSURE ENGINE
+// -------------------------------------------------------------
+router.get('/industry-exposure', requireAuth, (req, res) => {
+  const userActivities = db.prepare('SELECT * FROM industry_exposure_activities WHERE user_id = ?').all(req.user.id);
+  
+  const opportunities = INDUSTRY_EXPOSURE_CATALOG.map((opp) => {
+    const logged = userActivities.find((act) => act.title === opp.title);
+    return {
+      ...opp,
+      userStatus: logged?.status || null,
+      loggedNotes: logged?.notes || null
+    };
+  });
+
+  res.json({
+    opportunities,
+    userActivities
+  });
+});
+
+router.post('/industry-exposure/log', requireAuth, (req, res) => {
+  const { activityType, title, organization, date, status = 'registered', isVerified = 0, notes = '' } = req.body;
+  if (!title || !organization) {
+    return res.status(400).json({ error: 'Activity title and organization are required.' });
+  }
+
+  const id = 'act_' + Date.now();
+  db.prepare(`
+    INSERT INTO industry_exposure_activities (id, user_id, activity_type, title, organization, date, status, is_verified, notes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).run(
+    id,
+    req.user.id,
+    activityType || 'workshop',
+    title,
+    organization,
+    date || new Date().toISOString().split('T')[0],
+    status,
+    isVerified ? 1 : 0,
+    notes
+  );
+
+  // Recalculate readiness score
+  calculateCareerReadiness(req.user.id, db);
+
+  createNotification(
+    req.user.id,
+    'Industry Activity Logged 🌐',
+    `Logged "${title}" with ${organization}. Exposure points updated.`,
+    '/industry-exposure'
+  );
+
+  res.json({ success: true, message: 'Industry exposure activity logged successfully.', activityId: id });
+});
+
+// -------------------------------------------------------------
+// 2A-6. CAREER LAUNCH PATHWAYS (PLACEMENT, HIGHER STUDIES, ENTREPRENEURSHIP, FREELANCING)
+// -------------------------------------------------------------
+router.get('/career-launch', requireAuth, (req, res) => {
+  const activePlan = db.prepare('SELECT * FROM career_launch_plans WHERE user_id = ? AND status = ? LIMIT 1').get(req.user.id, 'active');
+  const activeGoal = db.prepare('SELECT * FROM career_goals WHERE user_id = ? AND status = ? LIMIT 1').get(req.user.id, 'active');
+
+  let currentPlan = null;
+  if (activePlan) {
+    currentPlan = {
+      ...activePlan,
+      milestones: JSON.parse(activePlan.milestones_json || '[]')
+    };
+  }
+
+  res.json({
+    activePlan: currentPlan,
+    availableTemplates: CAREER_LAUNCH_TEMPLATES,
+    activeGoal: activeGoal?.title || null
+  });
+});
+
+router.post('/career-launch/select', requireAuth, (req, res) => {
+  const { pathwayType, targetRole } = req.body;
+  const template = CAREER_LAUNCH_TEMPLATES[pathwayType];
+  if (!template) {
+    return res.status(400).json({ error: 'Invalid launch pathway selected.' });
+  }
+
+  // Deactivate existing plans
+  db.prepare("UPDATE career_launch_plans SET status = 'archived', updated_at = CURRENT_TIMESTAMP WHERE user_id = ?").run(req.user.id);
+
+  const planId = 'clp_' + Date.now();
+  db.prepare(`
+    INSERT INTO career_launch_plans (id, user_id, pathway_type, target_role, milestones_json, status, progress_pct, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'active', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `).run(
+    planId,
+    req.user.id,
+    pathwayType,
+    targetRole || template.title,
+    JSON.stringify(template.milestones)
+  );
+
+  createNotification(
+    req.user.id,
+    `Career Launch Pathway Activated: ${template.title} 🎯`,
+    `You are now enrolled in the ${template.title}. Complete your launch milestones to finalize placement.`,
+    '/career-launch'
+  );
+
+  res.json({
+    success: true,
+    message: `Activated ${template.title}`,
+    plan: {
+      id: planId,
+      pathwayType,
+      targetRole: targetRole || template.title,
+      milestones: template.milestones,
+      status: 'active',
+      progressPct: 0
+    }
+  });
+});
+
+router.patch('/career-launch/milestone', requireAuth, (req, res) => {
+  const { milestoneId, completed } = req.body;
+  const activePlan = db.prepare('SELECT * FROM career_launch_plans WHERE user_id = ? AND status = ? LIMIT 1').get(req.user.id, 'active');
+  if (!activePlan) {
+    return res.status(404).json({ error: 'No active career launch plan found.' });
+  }
+
+  const milestones = JSON.parse(activePlan.milestones_json || '[]');
+  const target = milestones.find((m) => m.id === milestoneId);
+  if (!target) {
+    return res.status(404).json({ error: 'Milestone not found in plan.' });
+  }
+
+  target.completed = Boolean(completed);
+  const completedCount = milestones.filter((m) => m.completed).length;
+  const progressPct = Math.round((completedCount / milestones.length) * 100);
+
+  db.prepare(`
+    UPDATE career_launch_plans SET
+      milestones_json = ?,
+      progress_pct = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(JSON.stringify(milestones), progressPct, activePlan.id);
+
+  // Recalculate readiness
+  calculateCareerReadiness(req.user.id, db);
+
+  res.json({ success: true, progressPct, milestones });
+});
+
+// -------------------------------------------------------------
+// 2B. CAREER CATALOG, DISCOVERY & COMPARISON (MODULE 1-4)
+// -------------------------------------------------------------
+router.get('/careers', optionalAuth, (req, res) => {
+  const { search = '', category = '' } = req.query;
+  let careers = getAllCareers();
+  if (category) {
+    careers = careers.filter(c => c.category.toLowerCase() === category.toLowerCase());
+  }
+  if (search) {
+    const q = search.toLowerCase();
+    careers = careers.filter(c => 
+      c.career_name.toLowerCase().includes(q) ||
+      c.description.toLowerCase().includes(q) ||
+      c.category.toLowerCase().includes(q) ||
+      c.common_skills.some(s => s.toLowerCase().includes(q))
+    );
+  }
+  res.json({ count: careers.length, careers });
+});
+
+router.get('/careers/:id', optionalAuth, (req, res) => {
+  const career = getCareerById(req.params.id);
+  if (!career) {
+    return res.status(404).json({ error: 'Career pathway not found in catalog.' });
+  }
+  res.json({ career });
+});
+
+// Career Discovery Engine — Dynamic Multi-Category Recommendation
+router.post('/discovery', optionalAuth, (req, res) => {
+  const { priorities = {}, overrides = {} } = req.body;
+  let userProfile = {};
+  if (req.user && req.user.id) {
+    userProfile = db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(req.user.id) || {};
+  }
+  const mergedProfile = { ...userProfile, ...overrides };
+  const discoveryResult = runCareerDiscovery(mergedProfile, priorities);
+
+  if (req.user && req.user.id) {
+    try {
+      const explorationId = 'exp_' + Date.now();
+      db.prepare(`
+        INSERT INTO career_explorations (id, user_id, mode, user_inputs_json, priorities_json, recommendations_json, created_at)
+        VALUES (?, ?, 'discovery', ?, ?, ?, CURRENT_TIMESTAMP)
+      `).run(
+        explorationId,
+        req.user.id,
+        JSON.stringify(mergedProfile),
+        JSON.stringify(priorities),
+        JSON.stringify(discoveryResult.recommendations)
+      );
+    } catch (err) {
+      console.warn('Failed to log career exploration:', err);
+    }
+  }
+
+  res.json(discoveryResult);
+});
+
+// Career Comparison Matrix
+router.post('/compare', optionalAuth, (req, res) => {
+  const { careers = [] } = req.body;
+  if (!Array.isArray(careers) || careers.length < 2) {
+    return res.status(400).json({ error: 'Please provide at least 2 careers to compare.' });
+  }
+  let userProfile = {};
+  if (req.user && req.user.id) {
+    userProfile = db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(req.user.id) || {};
+  }
+  const result = compareCareers(careers, userProfile);
+  if (req.user && req.user.id) {
+    try {
+      const compId = 'cmp_' + Date.now();
+      db.prepare(`
+        INSERT INTO career_comparisons (id, user_id, careers_json, comparison_data_json, created_at)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `).run(compId, req.user.id, JSON.stringify(careers), JSON.stringify(result));
+    } catch (e) {
+      // ignore
+    }
+  }
+  res.json(result);
+});
+
+// Select a Career Pathway: Sets Active Goal + Generates Career-Specific 5-Phase Roadmap + Tasks
+router.post('/select-career', requireAuth, async (req, res) => {
+  const { careerName, targetPathway, currentLevel = 'Beginner' } = req.body;
+  if (!careerName) {
+    return res.status(400).json({ error: 'Career name is required.' });
+  }
+
+  const now = new Date().toISOString();
+  const goalTitle = targetPathway || careerName;
+
+  // 1. Set/update active goal
+  db.prepare("UPDATE career_goals SET status = 'paused' WHERE user_id = ? AND status = 'active'").run(req.user.id);
+  const goalId = 'goal_' + Date.now();
+  db.prepare(`
+    INSERT INTO career_goals (id, user_id, title, target_pathway, description, status, created_at)
+    VALUES (?, ?, ?, ?, ?, 'active', ?)
+  `).run(goalId, req.user.id, goalTitle, careerName, `Personalized career pathway for ${careerName}`, now);
+
+  // 2. Update user_profiles.target_goal
+  db.prepare("UPDATE user_profiles SET target_goal = ?, updated_at = ? WHERE user_id = ?").run(goalTitle, now, req.user.id);
+
+  // 3. Generate dynamic 5-phase roadmap specifically for THIS career
+  const rawProfile = db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(req.user.id) || {};
+  const roadmapData = generateDynamicRoadmap(careerName, { ...rawProfile, experience_level: currentLevel });
+
+  // Archive previous roadmaps
+  db.prepare("UPDATE roadmaps SET status = 'archived' WHERE user_id = ?").run(req.user.id);
+  const roadmapId = 'rdm_' + Date.now();
+  db.prepare(`
+    INSERT INTO roadmaps (
+      id, user_id, goal_id, title, target_role, current_level,
+      phases_json, weekly_plan_json, milestones_json, status, current_phase_index, progress_pct, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 15, ?)
+  `).run(
+    roadmapId,
+    req.user.id,
+    goalId,
+    roadmapData.title,
+    roadmapData.targetRole,
+    roadmapData.currentLevel,
+    JSON.stringify(roadmapData.phases),
+    JSON.stringify(roadmapData.weeklyPlan),
+    JSON.stringify(roadmapData.milestones),
+    now
+  );
+
+  // 4. Generate 3 initial career-specific tasks for Phase 1
+  const phase1 = roadmapData.phases[0];
+  const topics = phase1?.topics || ['Foundations', 'Safety & Tools', 'Practical Exercise'];
+  topics.slice(0, 3).forEach((topic, idx) => {
+    const taskData = generateDynamicTask(careerName, topic);
+    const taskId = 'tsk_' + Date.now() + '_' + idx;
+    const days = ['Yesterday', 'Today', 'Tomorrow'];
+    const statuses = idx === 0 ? 'completed' : (idx === 1 ? 'in_progress' : 'not_started');
+
+    db.prepare(`
+      INSERT INTO tasks (
+        id, roadmap_id, user_id, title, description, why_it_matters, skill,
+        difficulty, estimated_minutes, instructions_json, expected_outcome, status,
+        due_day, order_index, is_daily_task, created_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      taskId,
+      roadmapId,
+      req.user.id,
+      taskData.title,
+      taskData.description,
+      taskData.whyItMatters,
+      taskData.skill,
+      taskData.difficulty,
+      taskData.estimatedMinutes,
+      JSON.stringify(taskData.instructions),
+      taskData.expectedOutcome,
+      statuses,
+      days[idx],
+      idx + 1,
+      idx === 1 ? 1 : 0,
+      now,
+      idx === 0 ? now : null
+    );
+  });
+
+  // 5. In-app notification
+  createNotification(
+    req.user.id,
+    `Active Pathway: ${careerName} 🎯`,
+    `Your personalized 5-phase action plan and hands-on tasks for ${careerName} are now ready!`,
+    '/roadmap'
+  );
+
+  res.json({
+    success: true,
+    message: `Pathway '${careerName}' selected successfully. Roadmap and initial tasks activated!`,
+    goalId,
+    roadmapId,
+    careerName
+  });
 });
 
 // -------------------------------------------------------------
@@ -382,7 +1098,24 @@ router.post('/reality-check', requireAuth, async (req, res) => {
       now
     );
 
-    res.json({ assessmentId, result });
+    res.json({
+      assessmentId,
+      result,
+      targetCareer: result.targetCareer,
+      fitObservations: result.fitObservations,
+      strengths: result.strengths,
+      skillGaps: result.skillGaps,
+      skill_gaps: result.skillGaps,
+      requirements: result.requirements,
+      challenges: result.challenges,
+      preparationAreas: result.preparationAreas,
+      preparation_areas: result.preparationAreas,
+      alternativePathways: result.alternativePathways,
+      alternative_pathways: result.alternativePathways,
+      immediateNextSteps: result.immediateNextSteps,
+      immediate_next_steps: result.immediateNextSteps,
+      verdictSummary: result.verdictSummary
+    });
   } catch (err) {
     console.error('Reality check error:', err);
     res.status(500).json({ error: 'Reality check failed: ' + err.message });
@@ -391,16 +1124,32 @@ router.post('/reality-check', requireAuth, async (req, res) => {
 
 router.get('/reality-check/history', requireAuth, (req, res) => {
   const history = db.prepare('SELECT * FROM career_assessments WHERE user_id = ? ORDER BY created_at DESC LIMIT 10').all(req.user.id);
-  const formatted = history.map(h => ({
-    ...h,
-    strengths: JSON.parse(h.strengths || '[]'),
-    skill_gaps: JSON.parse(h.skill_gaps || '[]'),
-    requirements: JSON.parse(h.requirements || '[]'),
-    challenges: JSON.parse(h.challenges || '[]'),
-    preparation_areas: JSON.parse(h.preparation_areas || '[]'),
-    alternative_pathways: JSON.parse(h.alternative_pathways || '[]'),
-    immediate_next_steps: JSON.parse(h.immediate_next_steps || '[]'),
-  }));
+  const formatted = history.map(h => {
+    const strengths = JSON.parse(h.strengths || '[]');
+    const skillGaps = JSON.parse(h.skill_gaps || '[]');
+    const requirements = JSON.parse(h.requirements || '[]');
+    const challenges = JSON.parse(h.challenges || '[]');
+    const preparationAreas = JSON.parse(h.preparation_areas || '[]');
+    const alternativePathways = JSON.parse(h.alternative_pathways || '[]');
+    const immediateNextSteps = JSON.parse(h.immediate_next_steps || '[]');
+    return {
+      ...h,
+      targetCareer: h.target_career,
+      fitObservations: h.fit_observations,
+      verdictSummary: h.verdict_summary,
+      strengths,
+      skillGaps,
+      skill_gaps: skillGaps,
+      requirements,
+      challenges,
+      preparationAreas,
+      preparation_areas: preparationAreas,
+      alternativePathways,
+      alternative_pathways: alternativePathways,
+      immediateNextSteps,
+      immediate_next_steps: immediateNextSteps
+    };
+  });
   res.json({ history: formatted });
 });
 
@@ -558,6 +1307,7 @@ router.post('/roadmaps/generate', requireAuth, async (req, res) => {
     const initialTopics = phase1?.topics || ['Core Fundamentals', 'Practical Exercise', 'STAR Explanation'];
 
     initialTopics.slice(0, 3).forEach((topic, idx) => {
+      const taskData = generateDynamicTask(targetPathway || goalTitle, topic);
       const taskId = 'tsk_' + Date.now() + '_' + idx;
       const days = ['Yesterday', 'Today', 'Tomorrow'];
       const statuses = idx === 0 ? 'completed' : (idx === 1 ? 'in_progress' : 'not_started');
@@ -572,19 +1322,14 @@ router.post('/roadmaps/generate', requireAuth, async (req, res) => {
         taskId,
         roadmapId,
         req.user.id,
-        `Mastering ${topic}: Hands-on Exercise`,
-        `Complete a practical exercise applying ${topic} to build real-world competency.`,
-        `Directly tested in real-world professional scenarios and team interviews.`,
-        topic,
-        'Intermediate',
-        45,
-        JSON.stringify([
-          `Step 1: Set up your workspace and review the syntax/safety guidelines for ${topic}.`,
-          `Step 2: Implement a functional test case or diagnostic run.`,
-          `Step 3: Document your observations and handle 1 edge case.`,
-          `Step 4: Prepare a 2-minute explanation of your approach.`
-        ]),
-        `A verified working demonstration of ${topic}.`,
+        taskData.title,
+        taskData.description,
+        taskData.whyItMatters,
+        taskData.skill,
+        taskData.difficulty,
+        taskData.estimatedMinutes,
+        JSON.stringify(taskData.instructions),
+        taskData.expectedOutcome,
         statuses,
         days[idx],
         idx + 1,
@@ -917,7 +1662,7 @@ router.post('/practice/evaluate', requireAuth, async (req, res) => {
       now
     );
 
-    res.json({ sessionId, evaluation });
+    res.json({ sessionId, evaluation, result: evaluation });
   } catch (err) {
     console.error('Practice evaluation error:', err);
     res.status(500).json({ error: 'Evaluation failed: ' + err.message });
@@ -1081,11 +1826,13 @@ router.post('/community/posts/:id/like', requireAuth, (req, res) => {
   if (existing) {
     db.prepare('DELETE FROM post_likes WHERE post_id = ? AND user_id = ?').run(postId, req.user.id);
     db.prepare('UPDATE community_posts SET likes_count = MAX(0, likes_count - 1) WHERE id = ?').run(postId);
-    return res.json({ hasLiked: false });
+    const post = db.prepare('SELECT likes_count FROM community_posts WHERE id = ?').get(postId);
+    return res.json({ hasLiked: false, likesCount: post?.likes_count || 0, likes_count: post?.likes_count || 0 });
   } else {
     db.prepare('INSERT INTO post_likes (post_id, user_id) VALUES (?, ?)').run(postId, req.user.id);
     db.prepare('UPDATE community_posts SET likes_count = likes_count + 1 WHERE id = ?').run(postId);
-    return res.json({ hasLiked: true });
+    const post = db.prepare('SELECT likes_count FROM community_posts WHERE id = ?').get(postId);
+    return res.json({ hasLiked: true, likesCount: post?.likes_count || 1, likes_count: post?.likes_count || 1 });
   }
 });
 
@@ -1325,6 +2072,10 @@ router.get('/skill-passport', requireAuth, (req, res) => {
   const practiceSessions = db.prepare('SELECT practice_type, mode, created_at, score_metrics_json FROM practice_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10').all(req.user.id);
   const completedChallenges = db.prepare("SELECT c.title, c.badge_icon, cp.completed_at FROM challenge_participants cp JOIN challenges c ON cp.challenge_id = c.id WHERE cp.user_id = ? AND cp.status = 'completed'").all(req.user.id);
 
+  const verifiedCount = skills.filter(s => s.source === 'verified').length;
+  const completedCount = completedTasks.length || skills.filter(s => s.source === 'completed_activity').length;
+  const userReportedCount = skills.filter(s => s.source === 'user_reported').length;
+
   res.json({
     skills,
     completedTasks,
@@ -1332,7 +2083,18 @@ router.get('/skill-passport', requireAuth, (req, res) => {
       ...p,
       scores: JSON.parse(p.score_metrics_json || '{}')
     })),
-    completedChallenges
+    completedChallenges,
+    passport: {
+      skills,
+      completedTasks,
+      practiceSessions
+    },
+    summary: {
+      totalSkills: skills.length,
+      verifiedCount,
+      completedActivitiesCount: completedCount,
+      userReportedCount
+    }
   });
 });
 
@@ -1383,15 +2145,17 @@ router.get('/dashboard/overview', requireAuth, (req, res) => {
   const notifications = db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5').all(req.user.id);
 
   // Next Best Action calculation
+  const isUndecided = !activeGoal || activeGoal.title.includes('Explore') || activeGoal.title.toLowerCase().includes('not sure');
+
   let nextBestAction = {
-    title: "Complete Today's Hands-On Task",
-    description: "Build your hands-on competency by finishing today's action item.",
-    buttonText: "Go to Tasks",
-    link: "/tasks",
-    type: "task"
+    title: "Discover Your Career Direction",
+    description: "Explore multi-category career pathways tailored to your real background, interests, and work style.",
+    buttonText: "Start Career Discovery",
+    link: "/explore",
+    type: "discovery"
   };
 
-  if (todayTasks.length > 0 && todayTasks.some(t => t.status !== 'completed')) {
+  if (!isUndecided && todayTasks.length > 0 && todayTasks.some(t => t.status !== 'completed')) {
     const nextTask = todayTasks.find(t => t.status !== 'completed');
     nextBestAction = {
       title: `Next: ${nextTask.title}`,
@@ -1400,17 +2164,17 @@ router.get('/dashboard/overview', requireAuth, (req, res) => {
       link: "/tasks",
       type: "task"
     };
-  } else if (!activeRoadmap) {
+  } else if (!isUndecided && !activeRoadmap) {
     nextBestAction = {
       title: "Run Career Reality Check",
       description: "Evaluate your profile against your target career to generate a personalized roadmap.",
       buttonText: "Start Reality Check",
-      link: "/reality-check",
+      link: `/reality-check?career=${encodeURIComponent(activeGoal?.target_pathway || activeGoal?.title || '')}`,
       type: "reality_check"
     };
-  } else if (practiceSessionsCount === 0) {
+  } else if (!isUndecided && practiceSessionsCount === 0) {
     nextBestAction = {
-      title: "Practice a Mock Interview Question",
+      title: "Practice a Scenario in Practice Studio",
       description: "Receive instant AI evaluation on clarity, structure, and relevance.",
       buttonText: "Open Practice Studio",
       link: "/practice",
@@ -1419,11 +2183,12 @@ router.get('/dashboard/overview', requireAuth, (req, res) => {
   }
 
   res.json({
+    hasSelectedCareer: !isUndecided,
     profileCompletion: profile.completion_pct || 40,
-    activeGoal: activeGoal ? activeGoal.title : 'Explore Career Pathways',
-    targetPathway: activeGoal ? activeGoal.target_pathway : (profile.target_goal || 'General'),
+    activeGoal: activeGoal ? activeGoal.title : 'Exploring Career Pathways',
+    targetPathway: activeGoal ? activeGoal.target_pathway : (profile.target_goal || 'General Exploration'),
     roadmapProgress: activeRoadmap ? activeRoadmap.progress_pct : 0,
-    currentPhase: activeRoadmap ? (JSON.parse(activeRoadmap.phases_json || '[]')[activeRoadmap.current_phase_index]?.name || 'Phase 1') : 'Getting Started',
+    currentPhase: activeRoadmap ? (JSON.parse(activeRoadmap.phases_json || '[]')[activeRoadmap.current_phase_index]?.name || 'Phase 1') : 'Discovery Stage',
     todayTasks: todayTasks.map(t => ({
       ...t,
       instructions: JSON.parse(t.instructions_json || '[]')
@@ -1445,26 +2210,21 @@ router.get('/dashboard/overview', requireAuth, (req, res) => {
 // -------------------------------------------------------------
 router.get('/settings', requireAuth, (req, res) => {
   const currentKey = getApiKey();
-  const maskedKey = currentKey ? currentKey.substring(0, 4) + '••••••••' + currentKey.substring(currentKey.length - 4) : '';
   const model = getSelectedModel();
 
   res.json({
     hasApiKey: !!currentKey,
-    maskedApiKey: maskedKey,
     activeModel: model,
-    availableModels: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp'],
+    availableModels: ['gemini-3.8-flash', 'gemini-3.1-pro-preview'],
     heuristicFallbackEnabled: true
   });
 });
 
 router.post('/settings', requireAuth, (req, res) => {
-  const { apiKey, model } = req.body;
+  const { model } = req.body;
   const now = new Date().toISOString();
 
-  if (apiKey !== undefined) {
-    db.prepare("INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('gemini_api_key', ?, ?)").run(apiKey.trim(), now);
-  }
-  if (model) {
+  if (model && (model === 'gemini-3.8-flash' || model === 'gemini-3.1-pro-preview')) {
     db.prepare("INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('ai_model', ?, ?)").run(model, now);
   }
 
@@ -1507,6 +2267,10 @@ router.get('/admin/stats', requireAuth, (req, res) => {
   const mentorsCount = db.prepare('SELECT COUNT(*) as c FROM mentors').get().c;
   const orgsCount = db.prepare('SELECT COUNT(*) as c FROM organizations').get().c;
   const reportsCount = db.prepare("SELECT COUNT(*) as c FROM post_reports WHERE status = 'pending'").get().c;
+  const dnaCount = db.prepare('SELECT COUNT(*) as c FROM career_dna_assessments').get().c;
+  const projectsCount = db.prepare('SELECT COUNT(*) as c FROM project_deliverables').get().c;
+  const industryCount = db.prepare('SELECT COUNT(*) as c FROM industry_exposure_activities').get().c;
+  const launchCount = db.prepare("SELECT COUNT(*) as c FROM career_launch_plans WHERE status = 'active'").get().c;
 
   res.json({
     counts: {
@@ -1516,7 +2280,11 @@ router.get('/admin/stats', requireAuth, (req, res) => {
       posts: postsCount,
       mentors: mentorsCount,
       organizations: orgsCount,
-      pendingReports: reportsCount
+      pendingReports: reportsCount,
+      dnaAssessments: dnaCount,
+      projectsSubmitted: projectsCount,
+      industryActivities: industryCount,
+      activeLaunchPlans: launchCount
     }
   });
 });

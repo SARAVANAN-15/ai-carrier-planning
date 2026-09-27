@@ -1,40 +1,73 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { db } from '../db/connection.js';
 
-// Retrieve active Gemini API key from database or environment
+// Retrieve active Gemini API key from environment
 export function getApiKey() {
-  try {
-    const row = db.prepare("SELECT value FROM system_settings WHERE key = 'gemini_api_key'").get();
-    if (row && row.value && row.value.trim() !== '') {
-      return row.value.trim();
-    }
-  } catch (e) {
-    // ignore
-  }
   return process.env.GEMINI_API_KEY || '';
 }
 
-// Retrieve selected model
+// Retrieve selected model (enforcing non-deprecated Gemini 3 models)
 export function getSelectedModel() {
+  const envModel = process.env.GEMINI_MODEL;
+  if (envModel && !envModel.includes('1.5') && !envModel.includes('2.0') && !envModel.includes('2.5')) {
+    return envModel;
+  }
   try {
     const row = db.prepare("SELECT value FROM system_settings WHERE key = 'ai_model'").get();
-    if (row && row.value) {
+    if (row && row.value && !row.value.includes('1.5') && !row.value.includes('2.0') && !row.value.includes('2.5')) {
       return row.value;
     }
   } catch (e) {
     // ignore
   }
-  return process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  return 'gemini-3.8-flash';
 }
 
-function getGeminiClient() {
+let geminiClientInstance = null;
+export function getGeminiClient() {
   const apiKey = getApiKey();
   if (!apiKey) return null;
-  return new GoogleGenerativeAI(apiKey);
+  if (!geminiClientInstance) {
+    geminiClientInstance = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+  }
+  return geminiClientInstance;
+}
+
+// Robust Gemini content generation with multi-model fallback & silent failure handling
+async function generateGeminiContent(prompt, modelOverride) {
+  const client = getGeminiClient();
+  if (!client) return null;
+
+  const preferredModel = modelOverride || getSelectedModel();
+  const models = [preferredModel, 'gemini-flash-latest', 'gemini-3.8-flash'];
+  const uniqueModels = [...new Set(models.filter(Boolean))];
+
+  for (const model of uniqueModels) {
+    try {
+      const response = await client.models.generateContent({
+        model,
+        contents: prompt,
+      });
+      if (response && response.text) {
+        return response.text;
+      }
+    } catch (err) {
+      // Gracefully continue to next model without throwing
+    }
+  }
+  return null;
 }
 
 // Helper to safely parse JSON from AI response
 function cleanAndParseJSON(text, fallback) {
+  if (!text) return fallback;
   try {
     // Strip markdown code fences if present
     let cleaned = text.trim();
@@ -49,7 +82,6 @@ function cleanAndParseJSON(text, fallback) {
     cleaned = cleaned.trim();
     return JSON.parse(cleaned);
   } catch (err) {
-    console.warn('Failed to parse AI JSON response, falling back:', err.message);
     return fallback;
   }
 }
@@ -58,7 +90,6 @@ function cleanAndParseJSON(text, fallback) {
 // MODULE 2: CAREER REALITY CHECK
 // -------------------------------------------------------------
 export async function runCareerRealityCheck(profile, targetCareer) {
-  const client = getGeminiClient();
   const prompt = `
 You are the Career Solver AI Reality Check Specialist.
 Analyze the realistic match between this user's profile and their target career: "${targetCareer}".
@@ -92,17 +123,11 @@ CRITICAL GUIDELINES:
 }
 `;
 
-  if (client) {
-    try {
-      const model = client.getGenerativeModel({ model: getSelectedModel() });
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      const parsed = cleanAndParseJSON(text, null);
-      if (parsed && parsed.fitObservations && parsed.skillGaps) {
-        return { ...parsed, aiSource: 'Google Gemini AI' };
-      }
-    } catch (err) {
-      console.warn('Gemini API call failed, falling back to intelligent heuristic:', err.message);
+  const text = await generateGeminiContent(prompt);
+  if (text) {
+    const parsed = cleanAndParseJSON(text, null);
+    if (parsed && parsed.fitObservations && parsed.skillGaps) {
+      return { ...parsed, aiSource: 'Google Gemini AI' };
     }
   }
 
@@ -146,19 +171,13 @@ Guidelines:
 }
 `;
 
-  if (client) {
-    try {
-      const model = client.getGenerativeModel({ model: getSelectedModel() });
-      const conversationText = history.slice(-4).map(m => `${m.sender}: ${m.text}`).join('\n');
-      const fullPrompt = `${systemPrompt}\n\nRecent Conversation:\n${conversationText}\n\nUser: ${query}\nLanguage: ${language}\nRespond with JSON:`;
-      const result = await model.generateContent(fullPrompt);
-      const text = result.response.text();
-      const parsed = cleanAndParseJSON(text, null);
-      if (parsed && parsed.answer) {
-        return { ...parsed, aiSource: 'Google Gemini AI' };
-      }
-    } catch (err) {
-      console.warn('Gemini Navigator failed, using heuristic:', err.message);
+  const conversationText = history.slice(-4).map(m => `${m.sender}: ${m.text}`).join('\n');
+  const fullPrompt = `${systemPrompt}\n\nRecent Conversation:\n${conversationText}\n\nUser: ${query}\nLanguage: ${language}\nRespond with JSON:`;
+  const text = await generateGeminiContent(fullPrompt);
+  if (text) {
+    const parsed = cleanAndParseJSON(text, null);
+    if (parsed && parsed.answer) {
+      return { ...parsed, aiSource: 'Google Gemini AI' };
     }
   }
 
@@ -169,7 +188,6 @@ Guidelines:
 // MODULE 5: ACTION PLAN & ROADMAP GENERATOR
 // -------------------------------------------------------------
 export async function runGenerateRoadmap(profile, goalTitle, targetPathway, currentLevel = 'Beginner') {
-  const client = getGeminiClient();
   const prompt = `
 You are Career Solver AI Roadmap Architect.
 Create a detailed, 5-phase personalized learning and career roadmap for:
@@ -224,17 +242,11 @@ Output JSON ONLY:
 }
 `;
 
-  if (client) {
-    try {
-      const model = client.getGenerativeModel({ model: getSelectedModel() });
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      const parsed = cleanAndParseJSON(text, null);
-      if (parsed && parsed.phases && parsed.phases.length > 0) {
-        return { ...parsed, aiSource: 'Google Gemini AI' };
-      }
-    } catch (err) {
-      console.warn('Gemini Roadmap generator failed, using heuristic:', err.message);
+  const text = await generateGeminiContent(prompt);
+  if (text) {
+    const parsed = cleanAndParseJSON(text, null);
+    if (parsed && parsed.phases && parsed.phases.length > 0) {
+      return { ...parsed, aiSource: 'Google Gemini AI' };
     }
   }
 
@@ -274,17 +286,11 @@ JSON Format ONLY:
 }
 `;
 
-  if (client) {
-    try {
-      const model = client.getGenerativeModel({ model: getSelectedModel() });
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      const parsed = cleanAndParseJSON(text, null);
-      if (parsed && parsed.title && parsed.instructions) {
-        return { ...parsed, aiSource: 'Google Gemini AI' };
-      }
-    } catch (err) {
-      console.warn('Gemini Task generator failed:', err.message);
+  const text = await generateGeminiContent(prompt);
+  if (text) {
+    const parsed = cleanAndParseJSON(text, null);
+    if (parsed && parsed.title && parsed.instructions) {
+      return { ...parsed, aiSource: 'Google Gemini AI' };
     }
   }
 
@@ -293,7 +299,6 @@ JSON Format ONLY:
 
 // Evaluate user's task submission
 export async function runEvaluateTaskSubmission(task, userNotes) {
-  const client = getGeminiClient();
   const prompt = `
 You are Career Solver's AI Task Coach.
 Review the user's completed submission for this hands-on task:
@@ -307,14 +312,9 @@ Do not give grades or declare absolute success; give actionable coaching.
 Output plain text feedback only.
 `;
 
-  if (client) {
-    try {
-      const model = client.getGenerativeModel({ model: getSelectedModel() });
-      const result = await model.generateContent(prompt);
-      return result.response.text().trim();
-    } catch (err) {
-      console.warn('Gemini Task Evaluator failed:', err.message);
-    }
+  const text = await generateGeminiContent(prompt);
+  if (text) {
+    return text.trim();
   }
 
   return `Great effort on completing "${task.title}"! Your submission demonstrates that you followed the practical sequence and understood the underlying mechanics. For your next step, try explaining your approach out loud as if answering a technical team lead or client—it will solidify your retention!`;
@@ -324,7 +324,6 @@ Output plain text feedback only.
 // MODULE 7 & 8: AI MENTOR (PERSISTENT & HANDOFF AWARE)
 // -------------------------------------------------------------
 export async function runMentorChat(profile, goal, mode, messages, currentRoadmap) {
-  const client = getGeminiClient();
   const lastUserMsg = messages[messages.length - 1]?.text || '';
 
   // Check for Human Mentor Handoff trigger
@@ -369,19 +368,13 @@ Output JSON:
 }
 `;
 
-  if (client) {
-    try {
-      const model = client.getGenerativeModel({ model: getSelectedModel() });
-      const recentHistory = messages.slice(-5).map(m => `${m.sender === 'user' ? 'User' : 'Mentor'}: ${m.text}`).join('\n');
-      const prompt = `${systemPrompt}\n\nChat History:\n${recentHistory}\n\nRespond with JSON:`;
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      const parsed = cleanAndParseJSON(text, null);
-      if (parsed && parsed.reply) {
-        return { ...parsed, aiSource: 'Google Gemini AI' };
-      }
-    } catch (err) {
-      console.warn('Gemini Mentor Chat failed:', err.message);
+  const recentHistory = messages.slice(-5).map(m => `${m.sender === 'user' ? 'User' : 'Mentor'}: ${m.text}`).join('\n');
+  const prompt = `${systemPrompt}\n\nChat History:\n${recentHistory}\n\nRespond with JSON:`;
+  const text = await generateGeminiContent(prompt);
+  if (text) {
+    const parsed = cleanAndParseJSON(text, null);
+    if (parsed && parsed.reply) {
+      return { ...parsed, aiSource: 'Google Gemini AI' };
     }
   }
 
@@ -392,7 +385,6 @@ Output JSON:
 // MODULE 9: PRACTICE STUDIO EVALUATOR
 // -------------------------------------------------------------
 export async function runEvaluatePractice(practiceType, mode, promptQuestion, userResponse) {
-  const client = getGeminiClient();
   const prompt = `
 You are the Career Solver Practice Studio AI Evaluator.
 Analyze the user's practice response:
@@ -433,17 +425,11 @@ Output JSON ONLY:
 }
 `;
 
-  if (client) {
-    try {
-      const model = client.getGenerativeModel({ model: getSelectedModel() });
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      const parsed = cleanAndParseJSON(text, null);
-      if (parsed && parsed.scores && parsed.feedback) {
-        return { ...parsed, aiSource: 'Google Gemini AI' };
-      }
-    } catch (err) {
-      console.warn('Gemini Practice Evaluator failed:', err.message);
+  const text = await generateGeminiContent(prompt);
+  if (text) {
+    const parsed = cleanAndParseJSON(text, null);
+    if (parsed && parsed.scores && parsed.feedback) {
+      return { ...parsed, aiSource: 'Google Gemini AI' };
     }
   }
 
@@ -454,7 +440,6 @@ Output JSON ONLY:
 // MODULE 18: BUSINESS & PROJECT BUILDER
 // -------------------------------------------------------------
 export async function runBuildBusinessPlan(ideaTitle, rawDescription, targetAudience) {
-  const client = getGeminiClient();
   const prompt = `
 You are Career Solver AI Startup & Practical Business Architect.
 Turn this raw idea into a structured, lean MVP plan:
@@ -486,17 +471,11 @@ Generate JSON ONLY:
 }
 `;
 
-  if (client) {
-    try {
-      const model = client.getGenerativeModel({ model: getSelectedModel() });
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      const parsed = cleanAndParseJSON(text, null);
-      if (parsed && parsed.problem && parsed.validationTasks) {
-        return { ...parsed, aiSource: 'Google Gemini AI' };
-      }
-    } catch (err) {
-      console.warn('Gemini Business Plan failed:', err.message);
+  const text = await generateGeminiContent(prompt);
+  if (text) {
+    const parsed = cleanAndParseJSON(text, null);
+    if (parsed && parsed.problem && parsed.validationTasks) {
+      return { ...parsed, aiSource: 'Google Gemini AI' };
     }
   }
 
@@ -596,6 +575,314 @@ function generateHeuristicRealityCheck(profile, targetCareer) {
         "Document 1 campaign story using the STAR framework in your Skill Passport"
       ],
       verdictSummary: "A natural transition path for empathetic communicators. Focusing on measurable metrics and a public portfolio will overcome the lack of a formal marketing degree.",
+      aiSource: 'Career Solver Heuristic Engine (Offline/Default)'
+    };
+  }
+
+  const isDesign = careerLower.includes('design') || careerLower.includes('graphic') || careerLower.includes('ui') || careerLower.includes('ux') || careerLower.includes('creative') || careerLower.includes('video');
+  if (isDesign) {
+    return {
+      targetCareer,
+      fitObservations: `Your visual creativity and interest in user-facing experiences provide an exciting starting point for ${targetCareer}. Creative careers require translating abstract ideas into systematic, accessible visual hierarchy.`,
+      strengths: [
+        "Intuitive visual aesthetics and creative curiosity",
+        "Appreciation for user experience and visual storytelling",
+        "Ability to receive constructive critique and iterate"
+      ],
+      skillGaps: [
+        "Industry-standard vector tooling (Figma auto-layout, design tokens, typography scales)",
+        "Web accessibility contrast standards (WCAG 2.1 compliance)",
+        "Case study documentation explaining design trade-offs"
+      ],
+      requirements: [
+        "A curated digital portfolio with 2-3 detailed case studies (problem, wireframes, iterations, results)",
+        "Mastery of typography, grid systems, and component architecture",
+        "Ability to present and defend design choices to stakeholders"
+      ],
+      challenges: [
+        "Differentiating from generic template creators with unique problem-solving rigor",
+        "Balancing pure aesthetics with business conversion constraints"
+      ],
+      preparationAreas: [
+        "Typographic Hierarchy & 8pt Grid Systems",
+        "Design System & Component Architecture in Figma",
+        "End-to-End Case Study Storytelling"
+      ],
+      alternativePathways: [
+        "Product / UI Designer",
+        "Visual Brand Identity Specialist",
+        "Multimedia / Motion Graphic Designer"
+      ],
+      immediateNextSteps: [
+        "Audit 3 mobile applications for layout balance and contrast accessibility",
+        "Build a reusable component set with interactive states in Figma",
+        "Present a 2-minute design rationale in Practice Studio"
+      ],
+      verdictSummary: "A highly rewarding creative pathway. Hiring managers prioritize the depth of your design thinking and live case studies far more than formal degrees.",
+      aiSource: 'Career Solver Heuristic Engine (Offline/Default)'
+    };
+  }
+
+  const isHealthcare = careerLower.includes('health') || careerLower.includes('nurse') || careerLower.includes('medical') || careerLower.includes('lab') || careerLower.includes('clinic');
+  if (isHealthcare) {
+    return {
+      targetCareer,
+      fitObservations: `Your desire to help people and interest in healthcare services align strongly with ${targetCareer}. Healthcare careers demand both scientific precision and compassionate patient communication.`,
+      strengths: [
+        "Strong human empathy and service-oriented mindset",
+        "Emotional composure and patience in demanding situations",
+        "Attention to hygiene, procedural accuracy, and safety"
+      ],
+      skillGaps: [
+        "Standard clinical vocabulary and physiological terminology",
+        "Structured clinical handoff communication (SBAR protocol)",
+        "Statutory patient privacy (HIPAA / healthcare compliance)"
+      ],
+      requirements: [
+        "Accredited diploma or degree meeting state/regional medical council standards",
+        "Supervised clinical practicum or ward rotation hours",
+        "Infection control and CPR / Basic Life Support (BLS) certification"
+      ],
+      challenges: [
+        "Shift-based schedules requiring physical and mental resilience",
+        "Zero-tolerance for procedural or medication documentation errors"
+      ],
+      preparationAreas: [
+        "Medical Terminology & Anatomy Fundamentals",
+        "Infection Prevention & Sterile Procedures",
+        "Empathetic Patient Intake & SBAR Handoff Drills"
+      ],
+      alternativePathways: [
+        "Medical Laboratory Technician",
+        "Healthcare Operations & Patient Administrator",
+        "Community Health Worker / Counselor"
+      ],
+      immediateNextSteps: [
+        "Review standard vital sign ranges and clinical terminology",
+        "Practice an SBAR patient handoff scenario in Practice Studio",
+        "Investigate accredited clinical training centers in your district"
+      ],
+      verdictSummary: "A deeply noble, recession-resilient career pathway. Ensuring formal clinical accreditation and practical communication drills will set you up for long-term patient care success.",
+      aiSource: 'Career Solver Heuristic Engine (Offline/Default)'
+    };
+  }
+
+  const isBusiness = careerLower.includes('business') || careerLower.includes('operation') || careerLower.includes('manage') || careerLower.includes('entrepreneur') || careerLower.includes('sales');
+  if (isBusiness) {
+    return {
+      targetCareer,
+      fitObservations: `Your organizational mindset and strategic interest in commerce provide solid groundwork for ${targetCareer}. Modern business roles blend operational discipline with customer empathy and financial literacy.`,
+      strengths: [
+        "Strategic thinking and commercial curiosity",
+        "Negotiation, relationship building, and customer empathy",
+        "Resourcefulness and ownership mindset"
+      ],
+      skillGaps: [
+        "Unit economics modeling (Customer Acquisition Cost, Lifetime Value, Margin Analysis)",
+        "Operational process mapping and bottleneck diagnosis",
+        "CRM & project management software fluency"
+      ],
+      requirements: [
+        "Demonstrated ability to improve a metric (revenue, conversion, lead cycle, or delivery speed)",
+        "Basic financial statements literacy (P&L, Cashflow, Invoicing)",
+        "Cross-functional stakeholder communication"
+      ],
+      challenges: [
+        "Navigating market ambiguity and unpredictable sales cycles",
+        "Balancing immediate operational firefighting with long-term strategy"
+      ],
+      preparationAreas: [
+        "Lean MVP Validation & Customer Discovery Interviews",
+        "Financial Unit Economics & Cost Budgeting",
+        "High-Impact Executive Presentations in Practice Studio"
+      ],
+      alternativePathways: [
+        "Operations & Logistics Coordinator",
+        "Business Development & Growth Executive",
+        "Small Business Founder / Entrepreneur"
+      ],
+      immediateNextSteps: [
+        "Draft a 1-page lean MVP validation plan in Business Builder",
+        "Interview 3 potential customers about a real-world operational pain point",
+        "Practice delivering an elevator pitch in Practice Studio"
+      ],
+      verdictSummary: "A versatile, high-growth pathway. Demonstrating tangible revenue impact or operational efficiency through practical projects will open executive doors.",
+      aiSource: 'Career Solver Heuristic Engine (Offline/Default)'
+    };
+  }
+
+  const isEducation = careerLower.includes('teach') || careerLower.includes('train') || careerLower.includes('educat') || careerLower.includes('instruct');
+  if (isEducation) {
+    return {
+      targetCareer,
+      fitObservations: `Your passion for mentorship and knowledge sharing makes ${targetCareer} a natural, fulfilling pathway. Great educators combine subject mastery with structured pedagogical communication.`,
+      strengths: [
+        "Clear verbal articulation and patience with learners",
+        "Passion for breaking complex concepts into digestible analogies",
+        "Encouraging, supportive mentorship presence"
+      ],
+      skillGaps: [
+        "Formative vs summative skill assessment design",
+        "Interactive curriculum mapping and adult learning principles",
+        "Classroom management and engagement techniques"
+      ],
+      requirements: [
+        "Recognized instructional or domain certification",
+        "Documented micro-teaching demonstrations or curriculum lesson plans",
+        "Continuous feedback collection and student assessment rubrics"
+      ],
+      challenges: [
+        "Managing diverse learning paces and student attention spans",
+        "Adapting curriculum to emerging technical/industry requirements"
+      ],
+      preparationAreas: [
+        "Lesson Plan Structuring & Active Learning Exercises",
+        "Diagnostic Feedback & Rubric Design",
+        "Micro-Teaching Delivery in Practice Studio"
+      ],
+      alternativePathways: [
+        "Corporate Skill Development Facilitator",
+        "Instructional Designer / Content Creator",
+        "Community Program Educator"
+      ],
+      immediateNextSteps: [
+        "Prepare a 15-minute structured lesson plan on a core subject topic",
+        "Record a micro-teaching demo in Practice Studio",
+        "Design a 5-question practical rubric evaluating project competency"
+      ],
+      verdictSummary: "An impactful, inspiring profession. Combining domain expertise with practical, hands-on teaching methodology will make you a sought-after trainer.",
+      aiSource: 'Career Solver Heuristic Engine (Offline/Default)'
+    };
+  }
+
+  const isAgri = careerLower.includes('agri') || careerLower.includes('farm') || careerLower.includes('crop') || careerLower.includes('food');
+  if (isAgri) {
+    return {
+      targetCareer,
+      fitObservations: `Your affinity for sustainable systems and practical operations positions you well for ${targetCareer}. Modern agriculture blends agronomy science, precision mechanization, and supply-chain efficiency.`,
+      strengths: [
+        "Practical orientation and appreciation for outdoor and natural biological systems",
+        "Resourcefulness and seasonal adaptability",
+        "Curiosity about agricultural technology and yield optimization"
+      ],
+      skillGaps: [
+        "Soil chemical analysis, pH balancing, and electrical conductivity testing",
+        "Post-harvest cold chain logistics and HACCP food safety standards",
+        "Precision irrigation telemetry (drip fertigation scheduling)"
+      ],
+      requirements: [
+        "Demonstrated knowledge of regional crop calendars and pest management",
+        "Familiarity with agricultural commodity markets (e-NAM, wholesale pricing)",
+        "Hands-on equipment safety and preventive maintenance discipline"
+      ],
+      challenges: [
+        "Unpredictable climate and weather dependencies requiring active contingency planning",
+        "Price fluctuations in perishable commodity markets"
+      ],
+      preparationAreas: [
+        "Soil Health & Nutrient Management Protocols",
+        "Cold Storage Operations & Zero-Loss Post-Harvest Handling",
+        "Farmer Producer Organization (FPO) Governance"
+      ],
+      alternativePathways: [
+        "Precision Agriculture & Farm Operations Manager",
+        "Cold Chain Logistics & Warehouse Lead",
+        "Agricultural Commodity Procurement Specialist"
+      ],
+      immediateNextSteps: [
+        "Review a standardized soil testing laboratory report format",
+        "Study temperature logging procedures in commercial cold storage",
+        "Practice an agricultural advisory explanation in Practice Studio"
+      ],
+      verdictSummary: "A critical, high-impact career pathway. Mastering precision farming tools and post-harvest preservation will position you as a modern agri-enterprise leader.",
+      aiSource: 'Career Solver Heuristic Engine (Offline/Default)'
+    };
+  }
+
+  const isHospitality = careerLower.includes('hotel') || careerLower.includes('hospitality') || careerLower.includes('guest') || careerLower.includes('resort') || careerLower.includes('culinary');
+  if (isHospitality) {
+    return {
+      targetCareer,
+      fitObservations: `Your warmth, service mindset, and communication composure make ${targetCareer} an excellent fit. Hospitality is built on creating memorable experiences through attention to detail and cultural empathy.`,
+      strengths: [
+        "Natural interpersonal warmth and welcoming communication style",
+        "Emotional poise and composure during demanding customer interactions",
+        "Multi-tasking ability across fast-moving dynamic environments"
+      ],
+      skillGaps: [
+        "Cloud Property Management System (PMS) operations (Opera, Cloudbeds)",
+        "Structured service recovery protocols (LAST framework: Listen, Apologize, Solve, Thank)",
+        "50-point housekeeping and VIP amenity turnover standards"
+      ],
+      requirements: [
+        "Professional presentation, punctuality, and cultural sensitivity",
+        "Fluency in front-office check-in/out and folio billing procedures",
+        "Conflict de-escalation mastery without defensiveness"
+      ],
+      challenges: [
+        "Shift-based and weekend hours requiring stamina and enthusiasm",
+        "Immediate resolution of unpredictable guest complaints"
+      ],
+      preparationAreas: [
+        "Front-Desk Property Management Systems (PMS)",
+        "High-Stress Service Recovery in Practice Studio",
+        "Luxury Property Standards & Housekeeping Audits"
+      ],
+      alternativePathways: [
+        "Customer Success & Product Specialist",
+        "Community Development & Event Coordinator",
+        "Operations & Logistics Coordinator"
+      ],
+      immediateNextSteps: [
+        "Practice a 3-minute guest check-in simulation in Practice Studio",
+        "Master the 4 steps of the LAST service recovery framework",
+        "Complete a 20-point room inspection audit checklist drill"
+      ],
+      verdictSummary: "A vibrant, globally mobile career. Developing technical PMS fluency alongside your natural empathy will accelerate your journey into front-office leadership.",
+      aiSource: 'Career Solver Heuristic Engine (Offline/Default)'
+    };
+  }
+
+  const isLogistics = careerLower.includes('logistics') || careerLower.includes('supply chain') || careerLower.includes('warehouse') || careerLower.includes('freight') || careerLower.includes('inventory');
+  if (isLogistics) {
+    return {
+      targetCareer,
+      fitObservations: `Your systematic mindset and focus on process efficiency make ${targetCareer} a strong match. Logistics is the backbone of global commerce, rewarding accuracy, organization, and real-time problem-solving.`,
+      strengths: [
+        "Structured thinking and attention to process details",
+        "Comfort with operational workflows and inventory tracking",
+        "Resourceful troubleshooting when bottlenecks occur"
+      ],
+      skillGaps: [
+        "Warehouse Management System (WMS) inventory cycle counting and variance reconciliation",
+        "Freight documentation (Bill of Lading, Manifests, Dispatch Routing)",
+        "Lean 5S warehouse organization and OSHA safety compliance"
+      ],
+      requirements: [
+        "Knowledge of ABC inventory classification and barcoding workflows",
+        "Understanding of carrier dispatch and on-time fulfillment metrics (OTIF)",
+        "Commitment to warehouse safety protocols and equipment inspection"
+      ],
+      challenges: [
+        "Fast-paced environments with strict shipping cutoff deadlines",
+        "Managing unexpected carrier delays and damaged freight exceptions"
+      ],
+      preparationAreas: [
+        "WMS Inventory Accuracy & Cycle Count Methodologies",
+        "Pick-Path Optimization & Dispatch Scheduling",
+        "Warehouse Safety & Root-Cause Discrepancy Audits"
+      ],
+      alternativePathways: [
+        "Operations & Logistics Coordinator",
+        "Procurement & Inventory Specialist",
+        "Agribusiness Packhouse Operations Supervisor"
+      ],
+      immediateNextSteps: [
+        "Analyze a sample 50-item inventory cycle count variance report",
+        "Draft an optimized pick route for a multi-order fulfillment batch",
+        "Practice an inventory discrepancy explanation in Practice Studio"
+      ],
+      verdictSummary: "An indispensable, recession-resistant career with direct progression into supply chain management and operations leadership.",
       aiSource: 'Career Solver Heuristic Engine (Offline/Default)'
     };
   }

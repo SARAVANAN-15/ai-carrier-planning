@@ -1,0 +1,8 @@
+{
+  "name": "Career Solver",
+  "description": "AI Career Guidance, Roadmaps & Personal Growth Platform",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

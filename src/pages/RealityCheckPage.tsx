@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShieldCheck,
   Sparkles,
@@ -22,7 +22,12 @@ export const RealityCheckPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile, activeGoal } = useAuth();
 
-  const [targetCareer, setTargetCareer] = useState(activeGoal?.target_pathway || activeGoal?.title || 'Java Backend Developer');
+  const [searchParams] = useSearchParams();
+  const urlCareer = searchParams.get('career');
+
+  const [targetCareer, setTargetCareer] = useState(
+    urlCareer || activeGoal?.target_pathway || activeGoal?.title || profile?.target_goal || 'Data Analyst'
+  );
   const [loading, setLoading] = useState(false);
   const [assessment, setAssessment] = useState<any | null>(null);
   const [history, setHistory] = useState<any[]>([]);
@@ -30,7 +35,11 @@ export const RealityCheckPage: React.FC = () => {
 
   useEffect(() => {
     loadHistory();
-  }, []);
+    if (urlCareer) {
+      setTargetCareer(urlCareer);
+      handleRunCheck(urlCareer);
+    }
+  }, [urlCareer]);
 
   const loadHistory = async () => {
     try {
@@ -119,11 +128,12 @@ export const RealityCheckPage: React.FC = () => {
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="text-[11px] text-indigo-300 font-semibold">Popular Pathways:</span>
             {[
-              'Java Backend Developer',
-              'Certified Electrical & Appliance Technician',
-              'Digital Marketing & Growth Specialist',
               'Data Analyst',
-              'QA Automation Engineer'
+              'Licensed Electrician',
+              'Registered / Clinical Nurse',
+              'Digital Growth Marketer',
+              'UI/UX Designer',
+              'Appliance Repair Technician'
             ].map((p) => (
               <button
                 key={p}

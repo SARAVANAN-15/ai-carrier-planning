@@ -14,10 +14,16 @@ import {
   Zap,
   Flame,
   ChevronRight,
-  Check
+  Check,
+  Compass,
+  Dna,
+  Gauge,
+  FolderGit2,
+  Rocket
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { JourneyStepper } from '../components/layout/JourneyStepper';
 import confetti from 'canvas-confetti';
 
 export const DashboardPage: React.FC = () => {
@@ -25,6 +31,8 @@ export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
 
   const [data, setData] = useState<any | null>(null);
+  const [dnaStatus, setDnaStatus] = useState<any | null>(null);
+  const [readinessData, setReadinessData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [quickMentorInput, setQuickMentorInput] = useState('');
 
@@ -35,8 +43,14 @@ export const DashboardPage: React.FC = () => {
   const fetchDashboard = async () => {
     setLoading(true);
     try {
-      const res = await api.getDashboardOverview();
-      setData(res);
+      const [dashRes, dnaRes, readRes] = await Promise.all([
+        api.getDashboardOverview(),
+        api.getCareerDna().catch(() => ({ hasDna: false, dna: null })),
+        api.getCareerReadiness().catch(() => null)
+      ]);
+      setData(dashRes);
+      setDnaStatus(dnaRes);
+      setReadinessData(readRes);
     } catch (err) {
       console.warn('Failed to load dashboard:', err);
     } finally {
@@ -68,6 +82,80 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Authoritative Company Journey Stepper */}
+      <JourneyStepper />
+
+      {/* Career DNA & Readiness Score Quick Glance Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* DNA Status Card */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+              <Dna className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Stage 2 & 3</span>
+                <span className="text-slate-300">•</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                  dnaStatus?.hasDna ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                }`}>
+                  {dnaStatus?.hasDna ? 'Assessed' : 'Action Required'}
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-slate-900 mt-0.5">
+                {dnaStatus?.hasDna ? 'Career DNA & 3P Profile' : 'Take Career DNA Assessment'}
+              </h4>
+              <p className="text-xs text-slate-500 line-clamp-1">
+                {dnaStatus?.hasDna
+                  ? `Process: ${dnaStatus.dna?.threeP?.process?.primary || 'Analytical'}`
+                  : 'Multi-dimensional evaluation across Interests, Aptitude & 3P Factors'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => navigate(dnaStatus?.hasDna ? '/3p-analysis' : '/career-dna')}
+            className="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-all shrink-0 flex items-center gap-1"
+          >
+            <span>{dnaStatus?.hasDna ? 'View 3P' : 'Start'}</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Readiness Score Card */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+              <Gauge className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Stage 11</span>
+                <span className="text-slate-300">•</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700">
+                  {readinessData?.level || 'Developing'}
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-slate-900 mt-0.5">
+                Career Readiness: <span className="text-indigo-600 font-extrabold">{readinessData?.overallScore || 45}%</span>
+              </h4>
+              <p className="text-xs text-slate-500 line-clamp-1">
+                Evaluated across Technical, Projects, Portfolio & Interviews
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => navigate('/readiness')}
+            className="px-4 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all shrink-0 flex items-center gap-1"
+          >
+            <span>Details</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
       {/* 1. Welcome & Primary Goal Banner */}
       <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-violet-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
         <div className="max-w-2xl relative z-10">
@@ -80,26 +168,49 @@ export const DashboardPage: React.FC = () => {
             </span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            {data.activeGoal}
-          </h1>
-          <p className="mt-1 text-xs sm:text-sm text-indigo-200">
-            Current Stage: <strong className="text-white">{data.currentPhase}</strong> • Target Pathway: {data.targetPathway}
-          </p>
+          {!data.hasSelectedCareer ? (
+            <div className="space-y-3">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                Not sure what career to choose?
+              </h1>
+              <p className="mt-1 text-xs sm:text-sm text-indigo-200">
+                You are currently exploring. Run Career Discovery to evaluate 14 distinct career categories tailored to your real background.
+              </p>
+              <div className="pt-2">
+                <button
+                  onClick={() => navigate('/explore')}
+                  className="px-5 py-2.5 rounded-xl bg-white text-indigo-950 font-bold text-xs shadow-md hover:bg-indigo-50 transition-all flex items-center gap-2"
+                >
+                  <Compass className="w-4 h-4 text-indigo-600" />
+                  <span>Start Career Discovery</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                {data.activeGoal}
+              </h1>
+              <p className="mt-1 text-xs sm:text-sm text-indigo-200">
+                Current Stage: <strong className="text-white">{data.currentPhase}</strong> • Target Pathway: {data.targetPathway}
+              </p>
 
-          {/* Quick Progress Bar */}
-          <div className="mt-4 max-w-md">
-            <div className="flex justify-between text-xs font-semibold text-indigo-200 mb-1">
-              <span>Roadmap Completion</span>
-              <span className="text-white font-bold">{data.roadmapProgress}%</span>
+              {/* Quick Progress Bar */}
+              <div className="mt-4 max-w-md">
+                <div className="flex justify-between text-xs font-semibold text-indigo-200 mb-1">
+                  <span>Roadmap Completion</span>
+                  <span className="text-white font-bold">{data.roadmapProgress}%</span>
+                </div>
+                <div className="w-full h-2.5 bg-white/20 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-400 rounded-full transition-all duration-500"
+                    style={{ width: `${data.roadmapProgress}%` }}
+                  />
+                </div>
+              </div>
             </div>
-            <div className="w-full h-2.5 bg-white/20 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-emerald-400 rounded-full transition-all duration-500"
-                style={{ width: `${data.roadmapProgress}%` }}
-              />
-            </div>
-          </div>
+          )}
         </div>
 
         {/* 4 Stats Chips */}

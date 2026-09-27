@@ -365,11 +365,157 @@ export function initDatabase() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    -- Career Catalog Table (Comprehensive multi-category careers)
+    CREATE TABLE IF NOT EXISTS career_catalog (
+      id TEXT PRIMARY KEY,
+      career_name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      description TEXT NOT NULL,
+      interest_areas TEXT NOT NULL, -- JSON array
+      work_styles TEXT NOT NULL, -- JSON array
+      common_skills TEXT NOT NULL, -- JSON array
+      transferable_skills TEXT NOT NULL, -- JSON array
+      education_pathways TEXT NOT NULL, -- JSON array
+      entry_pathways TEXT NOT NULL, -- JSON array
+      learning_areas TEXT NOT NULL, -- JSON array
+      practical_tasks TEXT NOT NULL, -- JSON array
+      portfolio_needs TEXT NOT NULL, -- JSON array
+      work_environment TEXT NOT NULL, -- JSON array
+      hands_on_level TEXT DEFAULT 'Moderate',
+      computer_use_level TEXT DEFAULT 'Moderate',
+      people_interaction_level TEXT DEFAULT 'Moderate',
+      income_potential TEXT DEFAULT 'Good Growth',
+      learning_duration TEXT DEFAULT '6-12 Months',
+      related_careers TEXT NOT NULL -- JSON array
+    );
+
+    -- Career Explorations Table (Discovery history and saved results)
+    CREATE TABLE IF NOT EXISTS career_explorations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      mode TEXT DEFAULT 'discovery', -- 'discovery' or 'direct'
+      user_inputs_json TEXT NOT NULL,
+      priorities_json TEXT,
+      recommendations_json TEXT NOT NULL,
+      selected_career TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- Career Comparisons Table (Side-by-side decision support)
+    CREATE TABLE IF NOT EXISTS career_comparisons (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      careers_json TEXT NOT NULL,
+      comparison_data_json TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     -- System Settings table (stores API key, model selection, etc.)
     CREATE TABLE IF NOT EXISTS system_settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- AI Career DNA Assessments Table
+    CREATE TABLE IF NOT EXISTS career_dna_assessments (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      interests_json TEXT NOT NULL,
+      aptitude_json TEXT NOT NULL,
+      work_style_json TEXT NOT NULL,
+      aspirations_json TEXT NOT NULL,
+      work_preferences_json TEXT NOT NULL,
+      three_p_json TEXT NOT NULL,
+      raw_responses_json TEXT NOT NULL,
+      summary_narrative TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- Skill Gap Reports Table
+    CREATE TABLE IF NOT EXISTS skill_gap_reports (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      career_id TEXT NOT NULL,
+      career_name TEXT NOT NULL,
+      overall_gap_pct REAL NOT NULL,
+      skills_comparison_json TEXT NOT NULL,
+      priority_actions_json TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- Career Readiness Metrics Table
+    CREATE TABLE IF NOT EXISTS career_readiness_metrics (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      overall_score INTEGER NOT NULL DEFAULT 25,
+      technical_score INTEGER NOT NULL DEFAULT 20,
+      communication_score INTEGER NOT NULL DEFAULT 30,
+      problem_solving_score INTEGER NOT NULL DEFAULT 25,
+      project_experience_score INTEGER NOT NULL DEFAULT 15,
+      portfolio_score INTEGER NOT NULL DEFAULT 10,
+      interview_score INTEGER NOT NULL DEFAULT 15,
+      professional_skills_score INTEGER NOT NULL DEFAULT 20,
+      breakdown_json TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- Career Launch Plans Table (Placement, Higher Studies, Entrepreneurship, Freelancing)
+    CREATE TABLE IF NOT EXISTS career_launch_plans (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      pathway_type TEXT NOT NULL,
+      target_role TEXT,
+      milestones_json TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
+      progress_pct INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- Industry Exposure Activities Table (Internships, Workshops, Hackathons, Connects)
+    CREATE TABLE IF NOT EXISTS industry_exposure_activities (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      activity_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      organization TEXT NOT NULL,
+      date TEXT,
+      status TEXT DEFAULT 'registered',
+      is_verified INTEGER DEFAULT 0,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- Project Deliverables Table (Project-Based Learning)
+    CREATE TABLE IF NOT EXISTS project_deliverables (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      career_id TEXT,
+      project_title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      problem_statement TEXT NOT NULL,
+      requirements_json TEXT NOT NULL,
+      skills_involved_json TEXT NOT NULL,
+      expected_deliverables_json TEXT NOT NULL,
+      evaluation_criteria_json TEXT NOT NULL,
+      status TEXT DEFAULT 'assigned',
+      deliverable_url TEXT,
+      deliverable_notes TEXT,
+      review_feedback TEXT,
+      score INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
   `);
 }

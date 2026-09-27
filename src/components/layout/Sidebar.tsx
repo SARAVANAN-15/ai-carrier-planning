@@ -16,8 +16,12 @@ import {
   Briefcase,
   Award,
   Settings,
-  ChevronRight,
   ShieldCheck,
+  Dna,
+  Scale,
+  FolderGit2,
+  Gauge,
+  Rocket,
   X
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -33,23 +37,39 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { t } = useLanguage();
   const location = useLocation();
 
-  const navItems = [
+  const coreJourneyItems = [
     { to: '/dashboard', label: t('dashboard'), icon: LayoutDashboard, badge: null },
-    { to: '/reality-check', label: t('realityCheck'), icon: ShieldCheck, badge: 'Core' },
-    { to: '/navigator', label: t('navigator'), icon: Compass, badge: 'AI' },
-    { to: '/compare', label: t('compare'), icon: GitCompare, badge: null },
-    { to: '/roadmap', label: t('roadmap'), icon: Map, badge: null },
+    { to: '/career-dna', label: 'Career DNA', icon: Dna, badge: 'Stage 2' },
+    { to: '/3p-analysis', label: '3P Analysis', icon: Compass, badge: 'Stage 3' },
+    { to: '/explore', label: 'Explore Careers', icon: Compass, badge: 'Stage 4' },
+    { to: '/skill-gap', label: 'Skill Gap', icon: Scale, badge: 'Stage 5' },
+    { to: '/roadmap', label: 'Learning Journey', icon: Map, badge: 'Stage 7' },
     { to: '/tasks', label: t('tasks'), icon: CheckSquare, badge: 'Daily' },
-    { to: '/mentor', label: t('mentor'), icon: Bot, badge: 'AI' },
-    { to: '/practice', label: t('practice'), icon: Mic2, badge: 'Studio' },
+    { to: '/projects', label: 'Projects (PBL)', icon: FolderGit2, badge: 'Stage 9' },
+    { to: '/industry-exposure', label: 'Industry Exposure', icon: Building2, badge: 'Stage 10' },
+    { to: '/readiness', label: 'Readiness Score', icon: Gauge, badge: 'Stage 11' },
+    { to: '/career-launch', label: 'Career Launch', icon: Rocket, badge: 'Stage 12' },
+    { to: '/skill-passport', label: t('skillPassport'), icon: Award, badge: 'Stage 13' },
+  ];
+
+  const mentorshipItems = [
+    { to: '/mentors', label: 'Expert Mentors', icon: UserCheck, badge: 'Human' },
+    { to: '/mentor', label: 'AI Career Mentor', icon: Bot, badge: 'Gemini' },
+  ];
+
+  const enhancementItems = [
+    { to: '/reality-check', label: t('realityCheck'), icon: ShieldCheck, badge: 'Reality' },
+    { to: '/compare', label: t('compare'), icon: GitCompare, badge: null },
+    { to: '/practice', label: t('practice'), icon: Mic2, badge: 'Drills' },
     { to: '/challenges', label: t('challenges'), icon: Trophy, badge: '7-Day' },
     { to: '/community', label: t('community'), icon: Users, badge: null },
-    { to: '/mentors', label: t('mentors'), icon: UserCheck, badge: 'Human' },
-    { to: '/organizations', label: t('organizations'), icon: Building2, badge: 'Demo' },
     { to: '/business', label: t('businessBuilder'), icon: Briefcase, badge: 'MVP' },
-    { to: '/skill-passport', label: t('skillPassport'), icon: Award, badge: 'Verified' },
+    { to: '/organizations', label: t('organizations'), icon: Building2, badge: null },
+  ];
+
+  const systemItems = [
     { to: '/settings', label: t('settings'), icon: Settings, badge: null },
-    { to: '/admin', label: 'Admin & Moderation', icon: ShieldCheck, badge: user?.role === 'admin' ? 'Admin' : 'Portal' },
+    { to: '/admin', label: 'Admin & Moderation', icon: ShieldCheck, badge: user?.role === 'admin' ? 'Admin' : null },
   ];
 
   return (
@@ -79,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 Career<span className="text-indigo-600">Solver</span>
               </span>
               <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">
-                AI Platform
+                Discover • Develop • Deliver
               </span>
             </div>
           </NavLink>
@@ -92,81 +112,196 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Active Goal Snippet */}
-        {activeGoal && (
-          <div className="mx-4 mt-3 p-3 bg-gradient-to-r from-indigo-50/80 to-violet-50/80 rounded-xl border border-indigo-100/70">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] font-semibold text-indigo-600 uppercase tracking-wider">
-                Active Pathway
-              </span>
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 status-dot-active" />
-            </div>
-            <p className="text-xs font-medium text-slate-800 line-clamp-1">
-              {activeGoal.title}
-            </p>
-          </div>
-        )}
-
         {/* Navigation list */}
-        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.to;
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5 text-xs">
+          {/* Active Goal Highlight */}
+          {activeGoal && (
+            <div className="p-3 rounded-xl bg-indigo-50/80 border border-indigo-100 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Target Career</span>
+                <span className="text-xs font-bold text-slate-800 line-clamp-1">{activeGoal.title}</span>
+              </div>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            </div>
+          )}
 
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => {
-                  if (window.innerWidth < 1024) onClose();
-                }}
-                className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 font-semibold'
-                    : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Icon
-                    className={`w-4 h-4 shrink-0 transition-colors ${
-                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600'
-                    }`}
-                  />
-                  <span className="truncate">{item.label}</span>
-                </div>
-
-                {item.badge && (
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ${
+          {/* Core Company Journey */}
+          <div>
+            <span className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+              Official Journey (1-13)
+            </span>
+            <div className="space-y-0.5">
+              {coreJourneyItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.to;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => {
+                      if (window.innerWidth < 1024) onClose();
+                    }}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl transition-all font-medium ${
                       isActive
-                        ? 'bg-white/20 text-white'
-                        : item.badge === 'Core'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : item.badge === 'AI'
-                        ? 'bg-violet-100 text-violet-700'
-                        : 'bg-slate-100 text-slate-600'
+                        ? 'bg-indigo-600 text-white font-semibold shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
-                    {item.badge}
-                  </span>
-                )}
-              </NavLink>
-            );
-          })}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                      <span className="truncate">{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Mentorship */}
+          <div>
+            <span className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+              Mentorship Network
+            </span>
+            <div className="space-y-0.5">
+              {mentorshipItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.to;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => {
+                      if (window.innerWidth < 1024) onClose();
+                    }}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl transition-all font-medium ${
+                      isActive
+                        ? 'bg-indigo-600 text-white font-semibold shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                      <span className="truncate">{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Additional Value Tools */}
+          <div>
+            <span className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+              Decision & Practice Tools
+            </span>
+            <div className="space-y-0.5">
+              {enhancementItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.to;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => {
+                      if (window.innerWidth < 1024) onClose();
+                    }}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl transition-all font-medium ${
+                      isActive
+                        ? 'bg-indigo-600 text-white font-semibold shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                      <span className="truncate">{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* System & Admin */}
+          <div>
+            <span className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+              System
+            </span>
+            <div className="space-y-0.5">
+              {systemItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.to;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => {
+                      if (window.innerWidth < 1024) onClose();
+                    }}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl transition-all font-medium ${
+                      isActive
+                        ? 'bg-indigo-600 text-white font-semibold shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                      <span className="truncate">{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* User Card */}
         {user && (
           <div className="p-3 border-t border-slate-100 bg-slate-50/50">
-            <div className="flex items-center gap-3 p-2 rounded-xl bg-white border border-slate-200/70 shadow-sm">
+            <div className="flex items-center gap-2.5 p-2 rounded-xl bg-white border border-slate-200/70 shadow-sm">
               <img
                 src={user.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${user.name}`}
                 alt={user.name}
-                className="w-9 h-9 rounded-full object-cover border border-indigo-200"
+                className="w-8 h-8 rounded-full object-cover border border-indigo-200 shrink-0"
               />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-slate-900 truncate">{user.name}</p>
-                <p className="text-[11px] text-slate-500 capitalize truncate">
+                <p className="text-[10px] text-slate-500 capitalize truncate">
                   {profile?.persona_type?.replace(/_/g, ' ') || user.role}
                 </p>
               </div>

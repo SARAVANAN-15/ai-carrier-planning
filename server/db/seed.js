@@ -8,9 +8,9 @@ export function hashPassword(password) {
 export function seedDatabase() {
   initDatabase();
 
-  // Check if already seeded
+  // Check if all personas are seeded
   const check = db.prepare('SELECT COUNT(*) as count FROM users').get();
-  if (check && check.count > 0) {
+  if (check && check.count >= 7) {
     console.log(`Database already has ${check.count} users. Updating seed data if necessary.`);
     return;
   }
@@ -20,7 +20,7 @@ export function seedDatabase() {
   const now = new Date().toISOString();
 
   // 1. SEED USERS & PERSONAS
-  // Persona 1: Arun Kumar (College Student - Java Backend)
+  // Persona 1: Arun Kumar (College Student - Tech & Data Exploration)
   const arunId = 'usr_arun_college';
   const arunPass = hashPassword('arun123');
 
@@ -28,7 +28,7 @@ export function seedDatabase() {
   const muthuId = 'usr_muthu_vocational';
   const muthuPass = hashPassword('muthu123');
 
-  // Persona 3: Priya Sharma (Working Professional Career Switcher - Support to Digital Marketing)
+  // Persona 3: Priya Sharma (Working Professional Career Switcher - Support to Growth Marketing)
   const priyaId = 'usr_priya_switcher';
   const priyaPass = hashPassword('priya123');
 
@@ -49,7 +49,7 @@ export function seedDatabase() {
   const adminPass = hashPassword('admin123');
 
   const insertUser = db.prepare(`
-    INSERT INTO users (id, name, email, password_hash, role, avatar, created_at)
+    INSERT OR REPLACE INTO users (id, name, email, password_hash, role, avatar, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
@@ -63,7 +63,7 @@ export function seedDatabase() {
 
   // 2. SEED USER PROFILES
   const insertProfile = db.prepare(`
-    INSERT INTO user_profiles (
+    INSERT OR REPLACE INTO user_profiles (
       user_id, persona_type, education_level, field_of_study, current_status, occupation,
       target_goal, experience_level, technical_skills, soft_skills, practical_skills,
       interests, work_preference, collaboration_preference, employment_preference,
@@ -72,20 +72,20 @@ export function seedDatabase() {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  // Arun: College Student Profile
+  // Arun: College Student Profile (Tech & Data Exploration)
   insertProfile.run(
     arunId,
     'college_student',
     'Undergraduate (B.Tech / B.E.)',
-    'Artificial Intelligence & Data Science (Final Year)',
+    'Computer Science & Engineering (Final Year)',
     'College Student',
     'Student',
-    'Placement-ready for a Java Backend Developer role',
+    'Explore Technology, Data & Engineering Pathways',
     'Intermediate',
-    JSON.stringify(['HTML/CSS', 'Basic Java', 'Core C++', 'SQL Basics', 'Git']),
+    JSON.stringify(['HTML/CSS', 'Python & SQL Basics', 'Problem Solving', 'Git', 'Data Structures']),
     JSON.stringify(['Problem Solving', 'Teamwork', 'Communication']),
     JSON.stringify([]),
-    JSON.stringify(['Technology', 'Engineering', 'Backend Systems']),
+    JSON.stringify(['Technology', 'Computers', 'Data', 'Engineering']),
     'computer_based',
     'balanced',
     'full_time',
@@ -94,7 +94,7 @@ export function seedDatabase() {
     1, 1, 'high_speed',
     'English',
     'Chennai, India',
-    'Final-year engineering student eager to secure a solid Java backend developer role. Looking for practical coding tasks, resume guidance, and interview practice.',
+    'Final-year engineering student evaluating whether to specialize in Data Analytics, Software Engineering, or Product Design. Looking for practical tasks and mentorship.',
     85
   );
 
@@ -150,9 +150,87 @@ export function seedDatabase() {
     78
   );
 
+  // Sneha: School Student Profile
+  insertProfile.run(
+    snehaId,
+    'school_student',
+    'High School (Senior Secondary - Science Stream)',
+    'Physics, Chemistry, Math & Computer Science',
+    'School Student',
+    '12th Grade Student',
+    'Explore Creative Design vs Science vs Engineering Pathways',
+    'Beginner',
+    JSON.stringify(['Basic Python', 'Digital Art', 'Figma basics']),
+    JSON.stringify(['Creativity', 'Curiosity', 'Visual Storytelling']),
+    JSON.stringify(['Sketching', 'Photography']),
+    JSON.stringify(['Design', 'Creativity', 'Science', 'Technology']),
+    'creative',
+    'balanced',
+    'higher_studies',
+    1.5,
+    'moderate',
+    1, 1, 'high_speed',
+    'English',
+    'Kolkata, India',
+    'Senior secondary student exploring whether to pursue UI/UX design, architecture, or computing.',
+    82
+  );
+
+  // Kavita: Entrepreneur Profile
+  insertProfile.run(
+    kavitaId,
+    'entrepreneur',
+    'Bachelor of Commerce',
+    'Accounting & Business',
+    'Entrepreneur',
+    'Founder & Operator',
+    'Scale an On-Demand Home Appliance Repair & Electrical Service',
+    'Intermediate',
+    JSON.stringify(['QuickBooks', 'Social Media Ads', 'Excel Modeling']),
+    JSON.stringify(['Vendor Negotiation', 'Customer Discovery', 'Team Leadership']),
+    JSON.stringify(['Cost Estimation', 'Logistics Planning']),
+    JSON.stringify(['Business', 'Entrepreneurship', 'Skilled trades', 'Helping people']),
+    'hands_on',
+    'team',
+    'self_employed',
+    2.0,
+    'moderate',
+    1, 1, 'high_speed',
+    'English',
+    'Ahmedabad, India',
+    'Commercial graduate running a verified local home repair service. Testing customer willingness to pay and building a lean MVP booking flow.',
+    85
+  );
+
+  // Deepak: Higher Studies Seeker Profile
+  insertProfile.run(
+    deepakId,
+    'higher_studies',
+    'Bachelor of Science (Physics)',
+    'Physical Sciences & Applied Mathematics',
+    'Looking for work / Academic Research',
+    'Graduate Researcher',
+    'Profile Building for Master of Science / Direct Ph.D. Applications',
+    'Intermediate',
+    JSON.stringify(['Python Data Analysis', 'LaTeX Documentation', 'Statistical Modeling']),
+    JSON.stringify(['Academic Writing', 'Literature Review', 'Analytical Reasoning']),
+    JSON.stringify(['Lab Equipment Operation']),
+    JSON.stringify(['Research', 'Science', 'Mathematics', 'Technology']),
+    'analytical',
+    'individual',
+    'higher_studies',
+    3.0,
+    'low',
+    1, 1, 'high_speed',
+    'English',
+    'Kochi, India',
+    'Physics graduate preparing application portfolios for funded international postgraduate and research fellowships.',
+    80
+  );
+
   // 3. SEED CAREER GOALS
   const insertGoal = db.prepare(`
-    INSERT INTO career_goals (id, user_id, title, target_pathway, description, status, target_date)
+    INSERT OR REPLACE INTO career_goals (id, user_id, title, target_pathway, description, status, target_date)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
@@ -160,9 +238,9 @@ export function seedDatabase() {
   insertGoal.run(
     arunGoalId,
     arunId,
-    'Java Backend Developer Placement',
-    'Java Backend Engineering',
-    'Build end-to-end REST APIs, master OOP & Spring Boot, solve DSA problems, and clear campus technical interviews.',
+    'Explore Technology & Data Careers',
+    'Technology & Data Systems',
+    'Explore Software Engineering, Data Analytics, and Product Design through practical tasks and mentorship.',
     'active',
     '2026-11-30'
   );
@@ -171,8 +249,8 @@ export function seedDatabase() {
   insertGoal.run(
     muthuGoalId,
     muthuId,
-    'Certified Electrical & Appliance Service Technician',
-    'Electrical & Appliance Services',
+    'Appliance Repair Technician Pathway',
+    'Skilled Trades',
     'Master electrical safety protocols, get formal trade certification, and establish trusted independent service client base.',
     'active',
     '2026-12-15'
@@ -182,11 +260,44 @@ export function seedDatabase() {
   insertGoal.run(
     priyaGoalId,
     priyaId,
-    'Digital Marketing & Growth Specialist',
-    'Digital Marketing & Performance Growth',
+    'Digital Growth Marketer Pathway',
+    'Marketing & Customer Growth',
     'Leverage customer empathy and communication skills into SEO, data-driven campaign management, and content marketing.',
     'active',
     '2026-10-31'
+  );
+
+  const snehaGoalId = 'goal_sneha_1';
+  insertGoal.run(
+    snehaGoalId,
+    snehaId,
+    'UI/UX & Creative Design Exploration',
+    'Design & Creative',
+    'Build a visual portfolio, explore design thinking, and prepare for creative bachelor programs.',
+    'active',
+    '2027-04-30'
+  );
+
+  const kavitaGoalId = 'goal_kavita_1';
+  insertGoal.run(
+    kavitaGoalId,
+    kavitaId,
+    'Home Services Marketplace MVP',
+    'Small Business & Entrepreneurship',
+    'Validate customer demand, design standard pricing, and acquire the first 25 paying households.',
+    'active',
+    '2026-11-15'
+  );
+
+  const deepakGoalId = 'goal_deepak_1';
+  insertGoal.run(
+    deepakGoalId,
+    deepakId,
+    'Funded MS / Ph.D. Research Admissions',
+    'Higher Studies & Research',
+    'Publish academic literature reviews, master research python, and draft statements of purpose.',
+    'active',
+    '2027-01-15'
   );
 
   // 4. SEED ROADMAP FOR ARUN
@@ -925,7 +1036,7 @@ export function seedDatabase() {
   `);
 
   insertSetting.run('ai_provider', 'gemini', now);
-  insertSetting.run('ai_model', 'gemini-1.5-flash', now);
+  insertSetting.run('ai_model', 'gemini-3.8-flash', now);
   insertSetting.run('heuristic_fallback_enabled', 'true', now);
   insertSetting.run('app_initialized', 'true', now);
 

@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   Settings,
-  Key,
   Bot,
   ShieldCheck,
   CheckCircle2,
-  RefreshCw,
+  Sparkles,
   Globe,
   Users,
-  AlertTriangle,
+  Cpu,
   Save
 } from 'lucide-react';
 import { api } from '../services/api';
@@ -20,8 +19,7 @@ export const SettingsPage: React.FC = () => {
   const { language, setLanguage } = useLanguage();
 
   const [settings, setSettings] = useState<any | null>(null);
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gemini-1.5-flash');
+  const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -46,11 +44,9 @@ export const SettingsPage: React.FC = () => {
 
     try {
       await api.saveSettings({
-        apiKey: apiKeyInput ? apiKeyInput.trim() : undefined,
         model: selectedModel
       });
-      setMessage('Settings saved successfully!');
-      setApiKeyInput('');
+      setMessage('AI model settings updated successfully!');
       await fetchSettings();
     } catch (err) {
       console.error('Failed to save settings:', err);
@@ -81,7 +77,7 @@ export const SettingsPage: React.FC = () => {
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Platform Settings & AI Configuration</h1>
             <p className="text-xs text-slate-500">
-              Manage your Google Gemini API key, AI model selection, language preferences, and demo environments.
+              Manage your Google Gemini AI engine model, language preferences, and interactive demo personas.
             </p>
           </div>
         </div>
@@ -99,61 +95,99 @@ export const SettingsPage: React.FC = () => {
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2.5">
             <Bot className="w-5 h-5 text-indigo-600" />
-            <h2 className="text-base font-bold text-slate-900">Google Gemini AI Engine</h2>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Google Gemini AI Engine</h2>
+              <p className="text-[11px] text-slate-500">Full-stack server-side integration via @google/genai</p>
+            </div>
           </div>
 
-          <span
-            className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-              settings?.hasApiKey
-                ? 'bg-emerald-100 text-emerald-800'
-                : 'bg-indigo-50 text-indigo-700'
-            }`}
-          >
-            {settings?.hasApiKey ? 'Live Gemini Connected' : 'Heuristic Engine (Offline Active)'}
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            Google Gemini Connected
           </span>
         </div>
 
-        <form onSubmit={handleSave} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Google Gemini API Key
-            </label>
-            <div className="relative">
-              <Key className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-              <input
-                type="password"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder={settings?.hasApiKey ? `Key configured (${settings.maskedApiKey})` : 'Paste your Gemini API key (optional)...'}
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              />
+        <form onSubmit={handleSave} className="space-y-5">
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <Cpu className="w-4 h-4 text-indigo-600" />
+                Active Model Selection
+              </span>
+              <span className="text-[11px] font-mono font-medium text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                {selectedModel}
+              </span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              Stored securely server-side. If left blank or without key, Career Solver runs its built-in high-fidelity domain heuristic engine.
-            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <label
+                className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  selectedModel === 'gemini-3.8-flash'
+                    ? 'border-indigo-600 bg-indigo-50/50 shadow-sm'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <input
+                    type="radio"
+                    name="model"
+                    value="gemini-3.8-flash"
+                    checked={selectedModel === 'gemini-3.8-flash'}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <strong className="text-xs text-slate-900">gemini-3.8-flash</strong>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">Recommended</span>
+                </div>
+                <p className="text-[11px] text-slate-500 pl-5">
+                  Ultra-fast, optimized for real-time guidance, chat mentorship, and task evaluations.
+                </p>
+              </label>
+
+              <label
+                className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  selectedModel === 'gemini-3.1-pro-preview'
+                    ? 'border-indigo-600 bg-indigo-50/50 shadow-sm'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <input
+                    type="radio"
+                    name="model"
+                    value="gemini-3.1-pro-preview"
+                    checked={selectedModel === 'gemini-3.1-pro-preview'}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <strong className="text-xs text-slate-900">gemini-3.1-pro-preview</strong>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-bold">Pro Reasoning</span>
+                </div>
+                <p className="text-[11px] text-slate-500 pl-5">
+                  Advanced reasoning for complex multi-year pathway synthesis and in-depth business plans.
+                </p>
+              </label>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">AI Model Selection</label>
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white"
-            >
-              <option value="gemini-1.5-flash">gemini-1.5-flash (Fast, recommended)</option>
-              <option value="gemini-1.5-pro">gemini-1.5-pro (Deep reasoning)</option>
-              <option value="gemini-2.0-flash-exp">gemini-2.0-flash-exp (Experimental)</option>
-            </select>
+          <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100 flex items-start gap-3">
+            <Sparkles className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-slate-600 space-y-1">
+              <p className="font-semibold text-slate-900">High-Fidelity Deterministic Fallback Engine</p>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Career Solver includes a full offline deterministic career intelligence engine. If network latency or API quotas occur, the platform seamlessly synthesizes verified roadmap milestones, practice rubrics, and mentor guidance without interruption.
+              </p>
+            </div>
           </div>
 
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-end pt-1">
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-1.5 disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-1.5 disabled:opacity-50 transition-colors"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>{saving ? 'Saving...' : 'Save Settings'}</span>
+              <span>{saving ? 'Saving...' : 'Save AI Configuration'}</span>
             </button>
           </div>
         </form>

@@ -55,6 +55,22 @@ export const api = {
   getGoals: () => request<any>('/goals'),
   createGoal: (body: any) => request<any>('/goals', { method: 'POST', body: JSON.stringify(body) }),
 
+  // Career Discovery, Catalog & Comparison (P0 Engine)
+  getCareers: (params?: { category?: string; search?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.category) searchParams.append('category', params.category);
+    if (params?.search) searchParams.append('search', params.search);
+    const qs = searchParams.toString();
+    return request<{ count: number; careers: any[] }>(`/careers${qs ? `?${qs}` : ''}`);
+  },
+  getCareerById: (id: string) => request<{ career: any }>(`/careers/${encodeURIComponent(id)}`),
+  runDiscovery: (body?: { priorities?: any; overrides?: any }) =>
+    request<any>('/discovery', { method: 'POST', body: JSON.stringify(body || {}) }),
+  compareCareersList: (careers: string[]) =>
+    request<any>('/compare', { method: 'POST', body: JSON.stringify({ careers }) }),
+  selectCareerPathway: (body: { careerName: string; targetPathway?: string; currentLevel?: string }) =>
+    request<any>('/select-career', { method: 'POST', body: JSON.stringify(body) }),
+
   // Reality Check & Comparison
   runRealityCheck: (targetCareer: string) => request<any>('/reality-check', { method: 'POST', body: JSON.stringify({ targetCareer }) }),
   getRealityCheckHistory: () => request<any>('/reality-check/history'),
@@ -175,4 +191,37 @@ export const api = {
   toggleMentorVerification: (id: string) => request<any>(`/admin/mentors/${id}/verify`, { method: 'PUT' }),
   getAdminOrganizations: () => request<{ organizations: any[]; opportunities: any[] }>('/admin/organizations'),
 
+  // -------------------------------------------------------------
+  // AUTHORITATIVE COMPANY JOURNEY APIS
+  // -------------------------------------------------------------
+  // AI Career DNA & 3P Analysis
+  getCareerDnaQuestions: () => request<any>('/career-dna/questions'),
+  getCareerDna: () => request<{ hasDna: boolean; dna: any }>('/career-dna'),
+  evaluateCareerDna: (responses: any) =>
+    request<any>('/career-dna/evaluate', { method: 'POST', body: JSON.stringify({ responses }) }),
+  getThreePAnalysis: () => request<{ threeP: any; context: any }>('/3p-analysis'),
+
+  // Skill Gap Identification
+  getSkillGaps: (careerId?: string) =>
+    request<any>(careerId ? `/skill-gaps/${careerId}` : '/skill-gaps'),
+
+  // Career Readiness Score
+  getCareerReadiness: () => request<any>('/readiness/score'),
+
+  // Project-Based Learning
+  getProjects: () => request<{ projects: any[]; activeGoal?: string }>('/projects'),
+  submitProject: (body: { projectId?: string; projectTitle: string; category?: string; deliverableUrl: string; deliverableNotes?: string }) =>
+    request<any>('/projects/submit', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Industry Exposure
+  getIndustryExposure: () => request<{ opportunities: any[]; userActivities: any[] }>('/industry-exposure'),
+  logIndustryActivity: (body: { activityType: string; title: string; organization: string; date?: string; status?: string; isVerified?: number; notes?: string }) =>
+    request<any>('/industry-exposure/log', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Career Launch Pathways (Placement, Higher Studies, Entrepreneurship, Freelancing)
+  getCareerLaunch: () => request<{ activePlan: any; availableTemplates: any; activeGoal?: string }>('/career-launch'),
+  selectCareerLaunchPathway: (pathwayType: string, targetRole?: string) =>
+    request<any>('/career-launch/select', { method: 'POST', body: JSON.stringify({ pathwayType, targetRole }) }),
+  updateLaunchMilestone: (milestoneId: string, completed: boolean) =>
+    request<any>('/career-launch/milestone', { method: 'PATCH', body: JSON.stringify({ milestoneId, completed }) }),
 };

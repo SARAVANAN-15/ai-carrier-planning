@@ -30,11 +30,11 @@ export const OnboardingPage: React.FC = () => {
   const [educationLevel, setEducationLevel] = useState('Undergraduate (B.Tech / B.E.)');
   const [fieldOfStudy, setFieldOfStudy] = useState('Computer Science / Data Science');
   const [occupation, setOccupation] = useState('Student');
-  const [targetGoal, setTargetGoal] = useState('Placement-ready for a Java Backend Developer role');
-  const [technicalSkills, setTechnicalSkills] = useState<string[]>(['Basic Java', 'SQL Basics', 'HTML/CSS']);
+  const [targetGoal, setTargetGoal] = useState("I'm not sure what career to choose");
+  const [technicalSkills, setTechnicalSkills] = useState<string[]>(['Problem Solving', 'Computer Basics']);
   const [practicalSkills, setPracticalSkills] = useState<string[]>([]);
-  const [softSkills, setSoftSkills] = useState<string[]>(['Problem Solving', 'Communication']);
-  const [interests, setInterests] = useState<string[]>(['Technology', 'Engineering']);
+  const [softSkills, setSoftSkills] = useState<string[]>(['Communication', 'Logical Thinking']);
+  const [interests, setInterests] = useState<string[]>(['Helping people', 'Technology']);
   const [workPreference, setWorkPreference] = useState('computer_based');
   const [dailyLearningHours, setDailyLearningHours] = useState(2);
   const [budgetConstraint, setBudgetConstraint] = useState('moderate');
@@ -45,6 +45,63 @@ export const OnboardingPage: React.FC = () => {
   // Skill input tags
   const [techInput, setTechInput] = useState('');
   const [practicalInput, setPracticalInput] = useState('');
+
+  // Load existing profile if resuming or refreshed
+  React.useEffect(() => {
+    const loadSavedProfile = async () => {
+      try {
+        const res = await api.getProfile();
+        if (res.profile) {
+          const p = res.profile;
+          if (p.persona_type) setPersonaType(p.persona_type);
+          if (p.education_level) setEducationLevel(p.education_level);
+          if (p.field_of_study) setFieldOfStudy(p.field_of_study);
+          if (p.occupation) setOccupation(p.occupation);
+          if (p.target_goal) setTargetGoal(p.target_goal);
+          if (Array.isArray(p.technical_skills) && p.technical_skills.length > 0) setTechnicalSkills(p.technical_skills);
+          if (Array.isArray(p.practical_skills) && p.practical_skills.length > 0) setPracticalSkills(p.practical_skills);
+          if (Array.isArray(p.soft_skills) && p.soft_skills.length > 0) setSoftSkills(p.soft_skills);
+          if (Array.isArray(p.interests) && p.interests.length > 0) setInterests(p.interests);
+          if (p.work_preference) setWorkPreference(p.work_preference);
+          if (p.daily_learning_hours) setDailyLearningHours(p.daily_learning_hours);
+          if (p.budget_constraint) setBudgetConstraint(p.budget_constraint);
+          if (p.has_computer !== undefined) setHasComputer(p.has_computer === 1 || p.has_computer === true);
+          if (p.preferred_language) setPreferredLanguage(p.preferred_language);
+          if (p.location) setLocation(p.location);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    loadSavedProfile();
+  }, []);
+
+  const handleNextStep = async () => {
+    // Silently persist intermediate step to database
+    try {
+      api.updateProfile({
+        persona_type: personaType,
+        education_level: educationLevel,
+        field_of_study: fieldOfStudy,
+        occupation,
+        current_status: occupation,
+        target_goal: targetGoal,
+        technical_skills: technicalSkills,
+        practical_skills: practicalSkills,
+        soft_skills: softSkills,
+        interests,
+        work_preference: workPreference,
+        daily_learning_hours: dailyLearningHours,
+        budget_constraint: budgetConstraint,
+        has_computer: hasComputer,
+        preferred_language: preferredLanguage,
+        location,
+        completion_pct: Math.round(((step + 1) / 4) * 100)
+      }).catch(() => {});
+    } catch (e) {}
+
+    setStep(step + 1);
+  };
 
   const handleAddTechSkill = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && techInput.trim()) {
@@ -91,7 +148,7 @@ export const OnboardingPage: React.FC = () => {
       });
 
       await refreshUser();
-      navigate('/reality-check');
+      navigate('/career-dna');
     } catch (err) {
       console.error('Onboarding submission failed:', err);
     } finally {
@@ -131,9 +188,9 @@ export const OnboardingPage: React.FC = () => {
                   {
                     id: 'college_student',
                     title: 'College Student',
-                    desc: 'Pursuing degree, targeting placement & campus recruitment.',
+                    desc: 'Pursuing degree, targeting placement & career pathway clarity.',
                     icon: GraduationCap,
-                    defGoal: 'Placement-ready for a Java Backend Developer role'
+                    defGoal: 'Explore Relevant Professional & Technical Careers'
                   },
                   {
                     id: 'vocational_practical',
@@ -332,12 +389,14 @@ export const OnboardingPage: React.FC = () => {
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
-                    'Java Backend Placement Ready',
-                    'Certified Electrical & Appliance Technician',
-                    'Data Analyst & Business Intelligence',
-                    'Digital Marketing & Growth Specialist',
-                    'Quality Assurance & Automation Engineer',
-                    'UI/UX Product Designer'
+                    "I'm not sure what career to choose (Help me explore)",
+                    'Data Analyst & Business Insights',
+                    'Licensed Electrical & Appliance Technician',
+                    'Healthcare Operations & Patient Care',
+                    'Digital Growth Marketing & Content',
+                    'UI/UX Product Designer',
+                    'Software Developer & Systems',
+                    'Small Business & Entrepreneurship'
                   ].map((preset) => (
                     <button
                       key={preset}
@@ -429,9 +488,9 @@ export const OnboardingPage: React.FC = () => {
               <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-start gap-3">
                 <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
                 <div className="text-xs text-indigo-900 leading-relaxed">
-                  <p className="font-bold">Next: Career Reality Check</p>
+                  <p className="font-bold">Next: AI Career DNA Assessment (Stage 2)</p>
                   <p className="mt-0.5">
-                    Upon completing onboarding, Career Solver will run an AI fit analysis on your target career ({targetGoal}) and identify your transferable strengths and missing skills.
+                    Basic profile saved. Career Solver will now conduct your AI Career DNA Assessment across Interests, Aptitude Indicators, Work Style, and 3P Factors before generating personalized career recommendations.
                   </p>
                 </div>
               </div>
@@ -454,7 +513,7 @@ export const OnboardingPage: React.FC = () => {
             {step < 4 ? (
               <button
                 type="button"
-                onClick={() => setStep(step + 1)}
+                onClick={handleNextStep}
                 className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all"
               >
                 Continue
@@ -468,7 +527,7 @@ export const OnboardingPage: React.FC = () => {
                 className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
               >
                 <Sparkles className="w-4 h-4" />
-                Launch Career Reality Check
+                Save Profile & Start AI Career DNA Assessment
               </button>
             )}
           </div>

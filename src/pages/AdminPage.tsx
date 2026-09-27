@@ -117,6 +117,40 @@ export const AdminPage: React.FC = () => {
     return matchesSearch && matchesRole;
   });
 
+  if (user?.role !== 'admin') {
+    return (
+      <div className="max-w-2xl mx-auto my-12 p-8 bg-white rounded-3xl border border-slate-200 shadow-soft text-center space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Access Restricted</h2>
+        <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto">
+          The Platform Administration & Moderation console requires administrator role privileges. Your current account ({user?.email || 'Logged in user'}) has the role <strong>'{user?.role || 'user'}'</strong>.
+        </p>
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <button
+            onClick={() => window.location.href = '/dashboard'}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all"
+          >
+            Return to Dashboard
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                await api.demoLogin('admin');
+                window.location.reload();
+              } catch (e) {}
+            }}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-1.5"
+          >
+            <ShieldAlert className="w-4 h-4" />
+            Switch to Admin Demo Account
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-fade-in pb-12">
       {/* Header Banner */}
@@ -275,6 +309,30 @@ export const AdminPage: React.FC = () => {
                   <p className="text-[11px] font-semibold text-slate-500 uppercase">Pending Reports</p>
                   <p className="text-2xl font-black text-rose-600 mt-1">{stats.pendingReports || 0}</p>
                   <span className="text-[10px] text-rose-500 font-semibold">Requires moderation</span>
+                </div>
+              </div>
+
+              {/* Company Flow Pipeline Metrics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 shadow-sm">
+                  <p className="text-[11px] font-bold text-indigo-700 uppercase">Career DNA Assessed</p>
+                  <p className="text-2xl font-black text-indigo-950 mt-1">{stats.dnaAssessments || 0}</p>
+                  <span className="text-[10px] text-indigo-600 font-semibold">Stage 2 Assessments</span>
+                </div>
+                <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 shadow-sm">
+                  <p className="text-[11px] font-bold text-emerald-700 uppercase">Projects Submitted</p>
+                  <p className="text-2xl font-black text-emerald-950 mt-1">{stats.projectsSubmitted || 0}</p>
+                  <span className="text-[10px] text-emerald-600 font-semibold">Stage 9 PBL Proofs</span>
+                </div>
+                <div className="p-4 rounded-2xl bg-violet-50/60 border border-violet-100 shadow-sm">
+                  <p className="text-[11px] font-bold text-violet-700 uppercase">Industry Exposure</p>
+                  <p className="text-2xl font-black text-violet-950 mt-1">{stats.industryActivities || 0}</p>
+                  <span className="text-[10px] text-violet-600 font-semibold">Stage 10 Activities</span>
+                </div>
+                <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-100 shadow-sm">
+                  <p className="text-[11px] font-bold text-amber-700 uppercase">Launch Pathways</p>
+                  <p className="text-2xl font-black text-amber-950 mt-1">{stats.activeLaunchPlans || 0}</p>
+                  <span className="text-[10px] text-amber-600 font-semibold">Stage 12 Active Tracks</span>
                 </div>
               </div>
 
