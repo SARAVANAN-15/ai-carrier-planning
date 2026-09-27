@@ -32,6 +32,7 @@ export const CommunityPage: React.FC = () => {
   const [activeCommentsPostId, setActiveCommentsPostId] = useState<string | null>(null);
   const [commentsMap, setCommentsMap] = useState<Record<string, any[]>>({});
   const [commentInput, setCommentInput] = useState('');
+  const [notification, setNotification] = useState<string | null>(null);
 
   const categories = [
     'All',
@@ -121,10 +122,11 @@ export const CommunityPage: React.FC = () => {
   };
 
   const handleDeletePost = async (postId: string) => {
-    if (!confirm('Are you sure you want to delete this post?')) return;
     try {
       await api.deletePost(postId);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
+      setNotification('Post deleted successfully.');
+      setTimeout(() => setNotification(null), 4000);
     } catch (err) {
       console.error('Failed to delete post:', err);
     }
@@ -133,7 +135,8 @@ export const CommunityPage: React.FC = () => {
   const handleReportPost = async (postId: string) => {
     try {
       await api.reportPost(postId, 'Inappropriate content or spam');
-      alert('Thank you for reporting. This post has been flagged for moderation.');
+      setNotification('Thank you for reporting. This post has been flagged for moderation.');
+      setTimeout(() => setNotification(null), 4000);
     } catch (err) {
       console.error('Report error:', err);
     }
@@ -141,6 +144,13 @@ export const CommunityPage: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
+      {notification && (
+        <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-900 shadow-sm flex items-center justify-between animate-fade-in">
+          <span>{notification}</span>
+          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-700 font-bold ml-2">✕</button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-soft flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

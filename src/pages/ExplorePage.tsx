@@ -52,6 +52,7 @@ export const ExplorePage: React.FC = () => {
   // Selected careers for comparison
   const [compareTray, setCompareTray] = useState<string[]>([]);
   const [isSelecting, setIsSelecting] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
 
   // Fetch initial discovery recommendations & catalog
   useEffect(() => {
@@ -90,7 +91,8 @@ export const ExplorePage: React.FC = () => {
         return prev.filter(c => c !== careerName);
       }
       if (prev.length >= 4) {
-        alert('You can compare a maximum of 4 pathways at once.');
+        setNotification('You can compare a maximum of 4 pathways at once.');
+        setTimeout(() => setNotification(null), 4000);
         return prev;
       }
       return [...prev, careerName];
@@ -115,7 +117,8 @@ export const ExplorePage: React.FC = () => {
       navigate('/roadmap');
     } catch (err) {
       console.error('Failed to select pathway:', err);
-      alert('Failed to activate pathway. Please try again.');
+      setNotification('Failed to activate pathway. Please try again.');
+      setTimeout(() => setNotification(null), 4000);
     } finally {
       setIsSelecting(null);
     }
@@ -134,6 +137,13 @@ export const ExplorePage: React.FC = () => {
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-16">
+      {notification && (
+        <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-900 shadow-sm flex items-center justify-between animate-fade-in">
+          <span>{notification}</span>
+          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-700 font-bold ml-2">✕</button>
+        </div>
+      )}
+
       {/* Top Banner: Dynamic Career Discovery */}
       <div className="relative overflow-hidden p-8 rounded-3xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-violet-900 text-white shadow-xl">
         <div className="relative z-10 max-w-3xl space-y-4">

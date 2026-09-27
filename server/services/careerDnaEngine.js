@@ -74,10 +74,10 @@ export const APTITUDE_QUESTIONS = [
  * Evaluates complete AI Career DNA & 3P Profile from structured assessment responses
  */
 export function evaluateCareerDNA(responses = {}, profile = {}) {
-  const interestsInput = responses.interests || []; // array of selected interest clusters
+  const interestsInput = responses.interests || responses.selectedInterests || []; // array of selected interest clusters
   const aptitudeAnswers = responses.aptitudeAnswers || {}; // { apt_1: 'a', ... }
-  const workStyleInput = responses.workStyle || {}; // { autonomy: 'independent', structure: 'structured', ... }
-  const aspirationsInput = responses.aspirations || {}; // { primaryLaunchGoal: 'placement', incomeVsStability: 'balanced', ... }
+  const workStyleInput = responses.workStyle || responses.workStyleDimensions || {}; // { autonomy: 'independent', structure: 'structured', ... }
+  const aspirationsInput = responses.aspirations || responses.aspirationDimensions || {}; // { primaryLaunchGoal: 'placement', incomeVsStability: 'balanced', ... }
   const workPrefsInput = responses.workPreferences || {}; // { computerUse: 'high', handsOn: 'moderate', ... }
 
   // 1. Evaluate Aptitude Indicators

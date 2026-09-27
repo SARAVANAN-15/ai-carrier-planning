@@ -99,7 +99,6 @@ export const AdminPage: React.FC = () => {
   };
 
   const handleResetDemo = async () => {
-    if (!window.confirm('Reset all demo data and restore initial seeds?')) return;
     try {
       await api.resetDemoData();
       setMessage({ text: 'Demo database reset to default state.', type: 'success' });

@@ -35,6 +35,7 @@ export const MentorsPage: React.FC = () => {
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [responseNote, setResponseNote] = useState('');
   const [myRequests, setMyRequests] = useState<any[]>([]);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMentors();
@@ -73,8 +74,11 @@ export const MentorsPage: React.FC = () => {
       setRespondingId(null);
       setResponseNote('');
       confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
+      setStatusMessage(`Mentorship request marked as ${status}.`);
+      setTimeout(() => setStatusMessage(null), 4000);
     } catch (err: any) {
-      alert(err.message || 'Action failed');
+      setStatusMessage(err.message || 'Action failed');
+      setTimeout(() => setStatusMessage(null), 4000);
     }
   };
 
@@ -115,6 +119,13 @@ export const MentorsPage: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {statusMessage && (
+        <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-900 shadow-sm flex items-center justify-between animate-fade-in">
+          <span>{statusMessage}</span>
+          <button onClick={() => setStatusMessage(null)} className="text-slate-400 hover:text-slate-700 font-bold ml-2">✕</button>
+        </div>
+      )}
+
       {/* Top Banner */}
       <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-soft flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

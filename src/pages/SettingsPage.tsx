@@ -56,13 +56,15 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleResetDemoData = async () => {
-    if (!confirm('Are you sure you want to reset all demo roadmaps, tasks, and community posts to initial seed state?')) return;
     try {
       await api.resetDemoData();
-      alert('Demo data has been successfully reset.');
-      window.location.reload();
-    } catch (err) {
+      setMessage('Demo data has been successfully reset to default state.');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+    } catch (err: any) {
       console.error('Reset error:', err);
+      setMessage(err.message || 'Failed to reset demo data.');
     }
   };
 

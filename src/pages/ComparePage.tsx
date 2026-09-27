@@ -38,6 +38,7 @@ export const ComparePage: React.FC = () => {
   const [comparisonResult, setComparisonResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [isActivating, setIsActivating] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
 
   // Load all available careers from catalog
   useEffect(() => {
@@ -77,13 +78,15 @@ export const ComparePage: React.FC = () => {
       if (selectedCareers.length > 2) {
         setSelectedCareers(selectedCareers.filter((c) => c !== careerName));
       } else {
-        alert('Please keep at least 2 careers for a side-by-side comparison.');
+        setNotification('Please keep at least 2 careers for a side-by-side comparison.');
+        setTimeout(() => setNotification(null), 4000);
       }
     } else {
       if (selectedCareers.length < 4) {
         setSelectedCareers([...selectedCareers, careerName]);
       } else {
-        alert('You can compare a maximum of 4 pathways simultaneously.');
+        setNotification('You can compare a maximum of 4 pathways simultaneously.');
+        setTimeout(() => setNotification(null), 4000);
       }
     }
   };
@@ -101,7 +104,8 @@ export const ComparePage: React.FC = () => {
       navigate('/roadmap');
     } catch (err) {
       console.error('Failed to activate pathway:', err);
-      alert('Failed to select career pathway.');
+      setNotification('Failed to select career pathway.');
+      setTimeout(() => setNotification(null), 4000);
     } finally {
       setIsActivating(null);
     }
@@ -109,6 +113,13 @@ export const ComparePage: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-16">
+      {notification && (
+        <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-900 shadow-sm flex items-center justify-between animate-fade-in">
+          <span>{notification}</span>
+          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-700 font-bold ml-2">✕</button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-soft space-y-4">
         <div className="flex items-center gap-3">
